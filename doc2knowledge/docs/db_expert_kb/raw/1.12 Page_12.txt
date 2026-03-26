@@ -1,0 +1,37 @@
+d93wn3adhmoaczlw4w9oej9k9k','xnsc1ds32g1t6ws4yla5z7cwaibna4qv','l0z7g6ut9n1g5b5
+r16np4p88us069yw4','essx3vxyb8rsr5svr01ol4xwv69drwil','hpc6n32lbx3i2jeunjzltfjmci815
+iy9','e8xmfexyz0r4v5dvl1axslc7z06e3vql','qilqvj63ekrjzfirxb7jqucgp76oywx7','6tdo7hasam
+67823srw9y46y18k525lyr','50xm88rlo4rs4b0so9pdhwqz5w2fma9c','x12mt0tsh4id82pp0n
+p034r2coqcjt5w','8qwhcf5rhygduy12ow02fp7twnuj72lo','2gm22d9rzibly6aw3spgzkadeuy
+o6q4f','26jzvs5s6ok9ip2xn6o7qky95lxj5j0o','5pi9hnvyyx3gol1o9485s2g6arf7gcnv','bjmepp
+f154r0wkwswahye19qkuobh5kj','6g5vx15lnhwupk3zriyidmyoe78naru1','5ltt4d5qmi47ogz
+pqkjwhrbv6wgogwda','zeiq1qht8wco8kkpv96h91oyp21rfnxz','hjo039u7k9hp7kfbj0aj5u6w
+4r9hx4zv','d0cqm3a9mvrm1kox9y0dppbpfxrt1o24','d3im71k85hah0k7x4vuxau7i9i6f94b6',
+'35wa7cjl5hslhcpuj33auogh9r1a1val','urcewbhrfcroyt969aszumky0xrbyymh','t03k6ykgkrzp
+dqi3n1swi102175mvi86','21gwzyi5gymqdi4si3p4g9qvwvaq6i4j','eazjyy842n324k9hs096xq
+znib6kb2o9','eun4vxf6yw2kvz8evjr2niix2cjm8jtr','2bmt46zc73tr9ewqzrm6bukrqgbaiwo8','
+a4lmiipxvfsahjyaencyekjvyp8y42ip','86m29taxlg2ijy2e1ib4gf89mtntx5zp','8s9zjffakti27fuof
+w93egv7u6mccdnk','ct4njx95dkmse3slh3mdhwufajrb67l1','rt45rwqgdlq2zol8goyjighdq20c
+fv2i','m933p3tf9x1f74qlev7p4hd1fi1f4kdo','6m2n5uh48r3191t6auovk131x1xbplqs','1yyiqs
+l1paxj7sx16zep7sd86tuqoqde','h7otxcktakyjsbmkx1waormcm1zze7nf','beajnf9de2az4mhd
+xs6nmpw747xjq2gv','4fo9dzra67kxscnxzio4qq691lnyscvs','8wa6hsrinzmkljqao8kqisgg2820
+l65e','hl2z00axi7gi1va71vetrttyzgug56au','zua9z2o88qichblf99ez1iz4zms6pxzc','fo1ril2u85
+57qogj9394oh1bpenaqomj','fz2k1agwbmatw5reompbpx399v1qwsul','1sc3p5jfacm04v6a
+madorvzeofubukka','1g5b4nkrmixcvbcctwgrn8nh0luhu087','hnihptwyemtmsejgy9trdr583
+nph1t98','9dlf46firpjgsn2wfzqmt1nzbx0mrr2z','5hg5k0bdsll99o0eg2vhf1velrbjz3ny','pmph
+5uuvu8g24sygaljkc7mhp432n27p','e4sldi4oh8nit3mvk9v6p2pcbpb1sa1s','w8ar7ec3ncs31e
+xblyuu70eg5duflxcr','42oq6r0f530401y0jlhren8gejrprm5u','jyfjvbqvxs2btsskln6leuljayyvgq
+yg','pfrliktl93n5n45r0402re9lzkxicz1i','0jxswszqcoh6f0e5ah2647qg0hf5e046','9lrhjokxb79g
+jid0ihn739nboib2q8h8','kp03oux48f2n0t7npdmbu99449z8jtx7','c0ixuezekn8lifrfjm7cneqe
+yzlrlcpf','si5nol75dkdn6k44uyen29juh4snz7up','blt0zurq01za2062pbk577r33vve71vm','1d
+7a4375hw0j5ir3keh96zzfci9g574f','a2yaoc377miinzcxm0qx804z1i868oat'); 
+执行计划为： 
+ 
+发现执行计划对 t2 表走了全表扫描，代价较大。 
+2. 对该 SQL 进行诊断： 
+ 
+其中第二条根因指出 not in 的元素长度为 100，建议将 in-clause 中的元素改为临时表
+或子查询，并用 not exists 替换 not in； 
+3. 按照诊断建议，首先将 in-clause 中的元素添加到临时表 string 中，并将 SQL 修改
+为：select * from t2 where not exists(select info from string where string.info=t2.c2);修改
+后执行计划为： 

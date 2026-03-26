@@ -1,0 +1,89 @@
+{
+    "case_id": "case_04_missing_index",
+    "case_name": "复杂查询缺失关键索引",
+    "case_description": "模拟复杂业务查询场景，涉及多表关联、多条件筛选、排序和分页。由于缺少关键索引，查询性能急剧下降，执行计划显示大量嵌套循环和排序操作。",
+    "category": "02_slow_queries",
+    "difficulty": "hard",
+    "alert_type": "SlowQueryDetected",
+    "severity": "critical",
+    "start_time": "1697315000",
+    "end_time": "1697315600",
+    "start_timestamp": "2023-10-15 04:23:20",
+    "end_timestamp": "2023-10-15 04:33:20",
+    "metrics": {
+        "cpu_usage": 0.72,
+        "memory_usage": 0.78,
+        "disk_io_read": 3500,
+        "disk_io_write": 100,
+        "active_connections": 45,
+        "slow_query_count": 8,
+        "avg_query_time": 120.5,
+        "longest_query_time": 300,
+        "temp_files": 25,
+        "temp_bytes": 5368709120,
+        "work_mem_usage": "high"
+    },
+    "alerts": [
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "critical",
+            "instance": "localhost:5432",
+            "description": "检测到执行时间超过5分钟的慢查询",
+            "summary": "CRITICAL SlowQueryDetected @localhost:5432 max_time=300s",
+            "startsAt": "2023-10-15T04:25:00.123456789Z"
+        },
+        {
+            "alertname": "HighTempFiles",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "大量临时文件产生，排序操作溢出到磁盘",
+            "summary": "WARN HighTempFiles @localhost:5432 count=25",
+            "startsAt": "2023-10-15T04:26:00.123456789Z"
+        }
+    ],
+    "labels": ["SLOW_QUERY", "COMPLEX_JOIN", "MISSING_INDEX", "SORT_OVERFLOW"],
+    "expected_root_causes": [
+        {
+            "cause": "关联字段缺少索引",
+            "description": "多表JOIN的关联字段未建立索引，导致嵌套循环扫描",
+            "confidence": 0.95
+        },
+        {
+            "cause": "排序字段缺少索引",
+            "description": "ORDER BY字段无索引，导致大量排序操作",
+            "confidence": 0.90
+        },
+        {
+            "cause": "work_mem不足",
+            "description": "排序和哈希操作内存不足，溢出到磁盘临时文件",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "为JOIN关联字段创建索引",
+            "description": "为多表关联的外键字段创建索引",
+            "sql_example": "CREATE INDEX idx_order_items_order_id ON order_items(order_id); CREATE INDEX idx_orders_customer_id ON orders(customer_id);"
+        },
+        {
+            "solution": "创建覆盖索引",
+            "description": "创建包含查询所需全部字段的复合索引",
+            "sql_example": "CREATE INDEX idx_orders_covering ON orders(customer_id, status) INCLUDE (order_date, total_amount);"
+        },
+        {
+            "solution": "增加work_mem配置",
+            "description": "提高排序和哈希操作的内存上限",
+            "config_example": "SET work_mem = '256MB'; 或在postgresql.conf中设置"
+        },
+        {
+            "solution": "优化查询语句",
+            "description": "重写查询减少JOIN数量，使用EXISTS替代IN",
+            "sql_example": "SELECT * FROM orders o WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id);"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["orders", "order_items", "customers", "products"],
+        "key_metrics": ["slow_query_count", "temp_files", "temp_bytes", "longest_query_time"],
+        "related_tools": ["obtain_metric_values", "get_slow_queries", "get_query_plan", "get_index_usage"]
+    }
+}

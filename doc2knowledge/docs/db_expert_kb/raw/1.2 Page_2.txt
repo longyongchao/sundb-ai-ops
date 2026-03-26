@@ -1,0 +1,33 @@
+根因一（LOCK_CONTENTION） 
+1. 在 t1 中插入测试数据。 
+2. 在 session1 中执行： 
+begin; 
+update t1 set c1=’slowsqltest’ where id between 100 and 150; 
+select pg_sleep(5);  --只作为举例场景，不做参考 
+end; 
+3. 在 session2 中执行： 
+delete from t1 where id=101; 
+此时因为该 SQL 被阻塞因此执行较慢。 
+4. 对该 SQL 执行根因诊断： 
+ 
+根因中指出该 SQL 执行期间被阻塞，阻塞其执行的 SQL：update t1 set c1=’slowsqltest’ 
+where id between 100 and 150;。 
+ 
+根因二（MANY_DEAD_TUPLES）： 
+1. 构造场景一 
+2. t1 表中插入数据：insert into t1 select generate_series(1,10000000),md5(random()::text), 
+md5(random()::text); 
+3. 执行：update t1 set c1=’adasdadsddfdfd’ where id > 1000000;此时生成大量 dead tuples。 
+4. 测试语句：select * from t1 where c1 > 'aweefefr' and c1 < 'ytgdsffdgsda'; 
+清理死元组之前执行计划 
+ 
+5. 进行慢 SQL 根因诊断：  
+ 
+其中第三个根因指出相关表存在大量死元组，影响 SQL 执行性能。 
+6. 清理之后执行计划
+ 
+发现清理死元组后执行时间大大缩短。 
+ 
+根因三 FETCH_LARGE_DATA： 
+1. 在 t1 上，运行：select c1, c2 from t1 where c2 > 'asdsafd23324r' and c2 < 
+'c32454fdfegdg'; 

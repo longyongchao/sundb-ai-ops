@@ -1,0 +1,89 @@
+{
+    "case_id": "case_14_replication",
+    "case_name": "主从复制延迟",
+    "case_description": "模拟主从复制延迟场景。主库写入量大，从库无法及时同步，导致读写分离架构下读取到过期数据。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "ReplicationLag",
+    "severity": "warning",
+    "start_time": "1697365000",
+    "end_time": "1697365600",
+    "start_timestamp": "2023-10-15 18:16:40",
+    "end_timestamp": "2023-10-15 18:26:40",
+    "metrics": {
+        "cpu_usage": 0.55,
+        "memory_usage": 0.60,
+        "disk_io_util": 0.70,
+        "replication_lag_seconds": 300,
+        "replication_lag_bytes": 1073741824,
+        "wal_send_count": 5000,
+        "wal_receive_count": 3500,
+        "master_tps": 2000,
+        "replica_tps": 500,
+        "active_connections_master": 100,
+        "active_connections_replica": 50
+    },
+    "alerts": [
+        {
+            "alertname": "ReplicationLag",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "主从复制延迟达到300秒",
+            "summary": "WARN ReplicationLag @localhost:5432 lag=300s",
+            "startsAt": "2023-10-15T18:18:00.123456789Z"
+        },
+        {
+            "alertname": "ReplicationLagHigh",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "复制延迟字节数达到1GB",
+            "summary": "WARN ReplicationLagHigh @localhost:5432 bytes=1GB",
+            "startsAt": "2023-10-15T18:19:00.123456789Z"
+        }
+    ],
+    "labels": ["REPLICATION_LAG", "MASTER_SLAVE", "WRITE_HEAVY"],
+    "expected_root_causes": [
+        {
+            "cause": "主库写入量过大",
+            "description": "主库TPS=2000，从库无法跟上同步速度",
+            "confidence": 0.95
+        },
+        {
+            "cause": "从库性能不足",
+            "description": "从库硬件配置低于主库，处理能力受限",
+            "confidence": 0.85
+        },
+        {
+            "cause": "网络带宽不足",
+            "description": "主从之间网络带宽成为瓶颈",
+            "confidence": 0.75
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "提升从库硬件配置",
+            "description": "增加从库CPU、内存和磁盘I/O能力",
+            "hardware_suggestion": "从库配置应与主库相当或更高"
+        },
+        {
+            "solution": "使用流复制优化",
+            "description": "调整wal_keep_segments和max_wal_senders",
+            "config_example": "wal_keep_size = '2GB', max_wal_senders = 10"
+        },
+        {
+            "solution": "增加从库数量",
+            "description": "部署多个从库分担读取压力",
+            "architecture_suggestion": "使用多个从库实现负载均衡"
+        },
+        {
+            "solution": "优化网络配置",
+            "description": "确保主从之间有足够的网络带宽",
+            "network_suggestion": "使用专用网络或增加带宽"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": [],
+        "key_metrics": ["replication_lag_seconds", "replication_lag_bytes", "master_tps", "replica_tps"],
+        "related_tools": ["obtain_metric_values", "get_replication_status"]
+    }
+}

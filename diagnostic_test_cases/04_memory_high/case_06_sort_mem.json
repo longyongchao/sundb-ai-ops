@@ -1,0 +1,90 @@
+{
+    "case_id": "case_06_sort_mem",
+    "case_name": "大数据量排序导致内存溢出",
+    "case_description": "模拟大数据量排序场景，由于work_mem设置过大且并发查询多，导致PostgreSQL进程内存使用率飙升至90%以上，系统开始使用Swap，查询性能急剧下降。",
+    "category": "04_memory_high",
+    "difficulty": "medium",
+    "alert_type": "NodeMemoryHigh",
+    "severity": "warning",
+    "start_time": "1697325000",
+    "end_time": "1697325600",
+    "start_timestamp": "2023-10-15 07:10:00",
+    "end_timestamp": "2023-10-15 07:20:00",
+    "metrics": {
+        "cpu_usage": 0.55,
+        "memory_usage": 0.92,
+        "memory_used_gb": 14.7,
+        "memory_total_gb": 16.0,
+        "swap_usage": 0.35,
+        "swap_used_gb": 3.5,
+        "shared_buffers_usage": 0.85,
+        "work_mem_per_query_mb": 256,
+        "active_connections": 80,
+        "temp_files": 150,
+        "temp_bytes": 10737418240,
+        "slow_query_count": 15
+    },
+    "alerts": [
+        {
+            "alertname": "NodeMemoryHigh",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "内存使用率达到92%，超过阈值85%",
+            "summary": "WARN NodeMemoryHigh @172.27.58.65:9100 0.92",
+            "startsAt": "2023-10-15T07:11:00.123456789Z"
+        },
+        {
+            "alertname": "HighSwapUsage",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "系统开始使用Swap，可能影响性能",
+            "summary": "WARN HighSwapUsage @172.27.58.65:9100 3.5GB",
+            "startsAt": "2023-10-15T07:12:00.123456789Z"
+        }
+    ],
+    "labels": ["HIGH_MEMORY", "SORT_OVERFLOW", "TEMP_FILES"],
+    "expected_root_causes": [
+        {
+            "cause": "work_mem设置过大",
+            "description": "work_mem设置为256MB，80个并发查询可能消耗20GB内存",
+            "confidence": 0.95
+        },
+        {
+            "cause": "并发查询过多",
+            "description": "80个活跃连接同时执行排序操作",
+            "confidence": 0.90
+        },
+        {
+            "cause": "大表排序操作",
+            "description": "多个查询对大表进行排序，产生大量临时文件",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "降低work_mem配置",
+            "description": "将work_mem从256MB降低到64MB，减少内存压力",
+            "config_example": "ALTER SYSTEM SET work_mem = '64MB'; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "限制并发连接数",
+            "description": "通过连接池限制最大并发连接",
+            "config_example": "max_connections = 100, 或使用PgBouncer限制连接池大小"
+        },
+        {
+            "solution": "为排序字段创建索引",
+            "description": "避免排序操作，直接使用索引顺序",
+            "sql_example": "CREATE INDEX idx_orders_date ON orders(order_date);"
+        },
+        {
+            "solution": "增加系统内存或调整shared_buffers",
+            "description": "增加物理内存或调整shared_buffers比例",
+            "config_example": "shared_buffers = '4GB' (建议为总内存的25%)"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["orders", "logs", "transactions"],
+        "key_metrics": ["memory_usage", "swap_usage", "temp_files", "work_mem_per_query_mb"],
+        "related_tools": ["obtain_metric_values", "get_table_stats", "get_setting"]
+    }
+}

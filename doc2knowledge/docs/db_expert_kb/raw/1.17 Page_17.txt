@@ -1,0 +1,25 @@
+        and l_shipdate > date '1995-03-17' 
+group by 
+        l_orderkey, 
+        o_orderdate, 
+        o_shippriority 
+order by 
+        revenue desc, 
+        o_orderdate 
+LIMIT 10;  
+其执行计划为： 
+ 
+可以发现执行计划选择了 sort + GroupAgg 算子。 
+（3） 对该 SQL 进行诊断，根因如下： 
+ 
+诊断发现 enable_hashagg 参数为 off，可能影响优化器执行计划选择。 
+（4） 将 enable_hashagg 设置成 on，并运行该 SQL，执行计划为： 
+ 
+此时优化器选择了 HashAGG 算子，执行效率提升较大。 
+情况三： 
+（1） 在 tpch 场景下执行 SQL: 
+select 
+        c_name, 
+        c_custkey, 
+        o_orderkey, 
+        o_orderdate, 

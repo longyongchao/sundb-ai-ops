@@ -1,0 +1,52 @@
+{
+    "case_id": "case_19_idle",
+    "case_name": "空闲系统误报测试",
+    "case_description": "模拟系统空闲状态下的正常指标。用于验证诊断引擎不会对正常状态产生误报，确保诊断的准确性。",
+    "category": "07_edge_cases",
+    "difficulty": "easy",
+    "alert_type": "None",
+    "severity": "info",
+    "start_time": "1697390000",
+    "end_time": "1697390600",
+    "start_timestamp": "2023-10-16 02:33:20",
+    "end_timestamp": "2023-10-16 02:43:20",
+    "metrics": {
+        "cpu_usage": 0.05,
+        "cpu_user": 0.02,
+        "cpu_system": 0.02,
+        "cpu_iowait": 0.01,
+        "cpu_idle": 0.95,
+        "memory_usage": 0.35,
+        "disk_io_util": 0.05,
+        "disk_io_read_mb": 5,
+        "disk_io_write_mb": 2,
+        "active_connections": 5,
+        "slow_query_count": 0,
+        "tps": 10,
+        "load_1m": 0.5,
+        "load_5m": 0.4,
+        "load_15m": 0.3
+    },
+    "alerts": [],
+    "labels": ["IDLE", "NORMAL", "NO_ANOMALY"],
+    "expected_root_causes": [
+        {
+            "cause": "系统正常",
+            "description": "所有指标处于正常范围，无异常需要诊断",
+            "confidence": 1.0
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "无需操作",
+            "description": "系统运行正常，无需任何优化操作",
+            "note": "此用例用于验证诊断引擎不会产生误报"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": [],
+        "key_metrics": ["cpu_usage", "memory_usage", "active_connections", "slow_query_count"],
+        "related_tools": ["obtain_metric_values"],
+        "expected_result": "NO_ANOMALY_DETECTED"
+    }
+}

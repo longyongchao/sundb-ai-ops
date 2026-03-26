@@ -1,0 +1,31 @@
+2. 执行计划： 
+ 
+3. 执行根因诊断： 
+ 
+     根因中指出 SQL 执行期间扫描大量元组（754238），导致性能较差。 
+ 
+根因四 UNREASONABLE_DATABASE_KNOB：当前不考虑此根因 
+ 
+根因五 UNUSED_AND_REDUNDANT_INDEX：SQL 相关表存在无用索引与冗余索引，它们会
+对 DML 性能产生一定的负向作用，即存在写放大现象。 
+根因七 INSERT_LARGE_DATA：批量插入数据时执行耗时较长 
+根因九 TOO_MANY_INDEX：表中存在过多索引也会对 DML 产生一定的负向作用 
+  下面对上述三个根因一起测试： 
+1. 在 t1 的 c1 上创建以下索引： 
+create index on t1(c1)； 
+create index on t1(c1, c2); 
+create index on t1(c2); 
+create index on t1(c2, c1); 
+2. 执行 SQL，保证 SQL 会使用索引（用户可增加 SQL 数量）: 
+select c1 from t1 where c1<'adsadfre' and c2<'tfdsfd'; 
+select c1 from t1 where c1>'adsadfre' and c1<'cfdsfd'; 
+select c1 from t1 where c2>'adsadfre' and c2<'cfdsfd'; 
+3. 此时查询 pg_stat_user_indexes 获取索引使用情况：      
+ 
+发现其中 t1_c1_c2_idx 索引未被使用。 
+4. 执行 SQL: insert into t1 select generate_series(10000000, 
+10100000),md5(random()::text), md5(random()::text);执行计划： 
+ 
+此时执行时间为 53s 左右。 
+5. 对 SQL: insert into t1 select generate_series(10000000, 10100000),md5(random()::text), 
+md5(random()::text);执行根因诊断： 

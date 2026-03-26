@@ -1,0 +1,83 @@
+{
+    "case_id": "case_15_index_bloat",
+    "case_name": "索引膨胀",
+    "case_description": "模拟索引膨胀场景。频繁的更新和删除操作导致索引页面碎片化，索引大小远超实际数据量，影响查询性能。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "IndexBloat",
+    "severity": "warning",
+    "start_time": "1697370000",
+    "end_time": "1697370600",
+    "start_timestamp": "2023-10-15 19:40:00",
+    "end_timestamp": "2023-10-15 19:50:00",
+    "metrics": {
+        "cpu_usage": 0.40,
+        "memory_usage": 0.55,
+        "disk_io_util": 0.50,
+        "table_size_mb": 1000,
+        "index_size_mb": 2500,
+        "index_bloat_ratio": 2.5,
+        "index_scan_count": 5000,
+        "index_tuple_count": 500000,
+        "dead_tuple_count": 200000,
+        "last_vacuum": "2023-10-10 00:00:00"
+    },
+    "alerts": [
+        {
+            "alertname": "IndexBloat",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "索引大小是表大小的2.5倍，存在严重膨胀",
+            "summary": "WARN IndexBloat @localhost:5432 ratio=2.5",
+            "startsAt": "2023-10-15T19:41:00.123456789Z"
+        },
+        {
+            "alertname": "HighDeadTuples",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "表中存在大量死元组，需要VACUUM",
+            "summary": "WARN HighDeadTuples @localhost:5432 count=200000",
+            "startsAt": "2023-10-15T19:42:00.123456789Z"
+        }
+    ],
+    "labels": ["INDEX_BLOAT", "DEAD_TUPLES", "FRAGMENTATION", "MAINTENANCE_NEEDED"],
+    "expected_root_causes": [
+        {
+            "cause": "频繁更新删除操作",
+            "description": "大量UPDATE/DELETE操作导致索引碎片化",
+            "confidence": 0.95
+        },
+        {
+            "cause": "VACUUM执行不及时",
+            "description": "最后VACUUM时间是5天前，死元组未及时清理",
+            "confidence": 0.90
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "重建索引",
+            "description": "使用REINDEX重建膨胀的索引",
+            "sql_example": "REINDEX INDEX idx_table_column;"
+        },
+        {
+            "solution": "使用CONCURRENTLY重建",
+            "description": "在线重建索引，不阻塞写入",
+            "sql_example": "REINDEX INDEX CONCURRENTLY idx_table_column;"
+        },
+        {
+            "solution": "执行VACUUM",
+            "description": "清理死元组，减少索引膨胀",
+            "sql_example": "VACUUM ANALYZE table_name;"
+        },
+        {
+            "solution": "调整autovacuum参数",
+            "description": "增加autovacuum执行频率",
+            "config_example": "ALTER TABLE table_name SET (autovacuum_vacuum_scale_factor = 0.05);"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["frequently_updated_table"],
+        "key_metrics": ["index_bloat_ratio", "dead_tuple_count", "last_vacuum"],
+        "related_tools": ["obtain_metric_values", "get_table_stats", "get_index_usage"]
+    }
+}

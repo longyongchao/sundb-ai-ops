@@ -1,0 +1,21 @@
+发现根因中指出 HashAGG 算子占整个代价的 49.47%。 
+ 
+根因二十八 ABNORMAL_SQL_STRUCTURE：SQL 结构不优（内核不支持优化场景） ，进而导
+致执行计划不优 
+1. 场景一中，测试 SQL： 
+select c1, count(distinct c2) from t1 group by c1; 
+2. 执行该 SQL，执行计划为： 
+ 
+我们发现该 SQL 走了 sort + GroupAGG 方式，导致代价较大（执行时间 80s） 
+3. 对该 SQL 执行慢 SQL 诊断，结果为： 
+ 
+其中第二个根因诊断出该 SQL 结构不优，第三条根因提出 HashAgg 不支持
+count(distinct xx)结构，因此我们按照第二个根因的建议对 SQL 进行改写。 
+4. 执行改写的 SQL，其执行计划为：
+1.jpeg  
+  
+最终 SQL 性能提升较大，执行时间缩短为 37s。 
+ 
+根因二十九 TIMED_TASK_CONFLICT：定时任务冲突 
+  此场景当前不考虑 
+ 

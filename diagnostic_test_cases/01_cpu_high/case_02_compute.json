@@ -1,0 +1,92 @@
+{
+    "case_id": "case_02_compute",
+    "case_name": "复杂SQL计算导致CPU飙升",
+    "case_description": "模拟数据分析场景下，执行包含大量聚合计算、窗口函数、多表关联的复杂SQL查询，导致CPU使用率持续高位。这类问题常见于报表生成、数据仓库分析等场景。",
+    "category": "01_cpu_high",
+    "difficulty": "medium",
+    "alert_type": "NodeCpuHigh",
+    "severity": "warning",
+    "start_time": "1697303655",
+    "end_time": "1697303804",
+    "start_timestamp": "2023-10-15 01:14:15",
+    "end_timestamp": "2023-10-15 01:16:44",
+    "metrics": {
+        "cpu_usage": 0.88,
+        "cpu_user": 0.75,
+        "cpu_system": 0.10,
+        "cpu_iowait": 0.02,
+        "cpu_idle": 0.12,
+        "load_1m": 5.8,
+        "load_5m": 4.5,
+        "load_15m": 3.2,
+        "memory_usage": 0.72,
+        "disk_io_read": 50,
+        "disk_io_write": 20,
+        "active_connections": 15,
+        "slow_query_count": 5,
+        "longest_query_time": 180
+    },
+    "alerts": [
+        {
+            "alertname": "NodeCpuHigh",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "CPU使用率达到88%，超过阈值80%",
+            "summary": "WARN NodeCpuHigh @172.27.58.65:9100 0.88",
+            "startsAt": "2023-10-15T01:14:49.467858611Z"
+        },
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到5条执行时间超过10秒的慢查询",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=5",
+            "startsAt": "2023-10-15T01:15:00.123456789Z"
+        }
+    ],
+    "labels": ["HIGH_CPU", "COMPLEX_QUERY", "AGGREGATION", "WINDOW_FUNCTION"],
+    "expected_root_causes": [
+        {
+            "cause": "复杂聚合计算",
+            "description": "SQL包含大量GROUP BY、SUM、AVG等聚合操作，消耗大量CPU资源",
+            "confidence": 0.90
+        },
+        {
+            "cause": "窗口函数计算",
+            "description": "使用ROW_NUMBER、RANK等窗口函数进行大数据量排序计算",
+            "confidence": 0.85
+        },
+        {
+            "cause": "多表关联计算",
+            "description": "多表JOIN操作导致中间结果集过大，增加计算复杂度",
+            "confidence": 0.80
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "创建物化视图预计算",
+            "description": "将频繁执行的聚合查询结果预计算并存储",
+            "sql_example": "CREATE MATERIALIZED VIEW mv_sales_summary AS SELECT region, SUM(amount) FROM sales GROUP BY region;"
+        },
+        {
+            "solution": "添加合适索引",
+            "description": "为GROUP BY和ORDER BY字段创建索引",
+            "sql_example": "CREATE INDEX idx_sales_region ON sales(region);"
+        },
+        {
+            "solution": "分批处理大数据量",
+            "description": "将大查询拆分为多个小批次执行",
+            "sql_example": "SELECT * FROM large_table WHERE id BETWEEN 1 AND 100000;"
+        },
+        {
+            "solution": "调整work_mem参数",
+            "description": "增加排序和哈希操作的内存分配",
+            "config_example": "SET work_mem = '256MB';"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["sales", "orders", "customers"],
+        "key_metrics": ["cpu_usage", "slow_query_count", "longest_query_time"],
+        "related_tools": ["obtain_metric_values", "get_running_queries", "get_query_plan"]
+    }
+}

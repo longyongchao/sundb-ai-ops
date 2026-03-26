@@ -1,0 +1,79 @@
+{
+    "case_id": "case_11_vacuum",
+    "case_name": "VACUUM操作影响性能",
+    "case_description": "模拟大型表执行VACUUM FULL操作时对系统性能的影响。VACUUM FULL会锁定表并消耗大量I/O资源，导致其他查询阻塞。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "LongRunningOperation",
+    "severity": "warning",
+    "start_time": "1697350000",
+    "end_time": "1697350600",
+    "start_timestamp": "2023-10-15 14:06:40",
+    "end_timestamp": "2023-10-15 14:16:40",
+    "metrics": {
+        "cpu_usage": 0.45,
+        "memory_usage": 0.60,
+        "disk_io_util": 0.85,
+        "disk_io_read_mb": 200,
+        "disk_io_write_mb": 600,
+        "active_connections": 50,
+        "blocked_queries": 35,
+        "lock_wait_count": 35,
+        "running_vacuum": true,
+        "vacuum_progress": 0.45,
+        "table_size_gb": 50
+    },
+    "alerts": [
+        {
+            "alertname": "LongRunningVacuum",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "VACUUM FULL操作执行时间过长",
+            "summary": "WARN LongRunningVacuum @localhost:5432 progress=45%",
+            "startsAt": "2023-10-15T14:08:00.123456789Z"
+        },
+        {
+            "alertname": "BlockedQueries",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "35个查询被VACUUM操作阻塞",
+            "summary": "WARN BlockedQueries @localhost:5432 count=35",
+            "startsAt": "2023-10-15T14:09:00.123456789Z"
+        }
+    ],
+    "labels": ["VACUUM", "BLOCKED_QUERY", "HIGH_IO", "TABLE_MAINTENANCE"],
+    "expected_root_causes": [
+        {
+            "cause": "VACUUM FULL锁定表",
+            "description": "VACUUM FULL获取AccessExclusiveLock，阻塞所有访问",
+            "confidence": 0.98
+        },
+        {
+            "cause": "表过大",
+            "description": "50GB大表VACUUM FULL需要大量时间和I/O",
+            "confidence": 0.90
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "使用pg_repack替代VACUUM FULL",
+            "description": "pg_repack可以在不锁表的情况下重建表",
+            "sql_example": "pg_repack --table=large_table -d database_name"
+        },
+        {
+            "solution": "在低峰期执行维护",
+            "description": "将VACUUM FULL安排在业务低峰期执行",
+            "best_practice": "使用维护窗口执行大型维护操作"
+        },
+        {
+            "solution": "配置autovacuum",
+            "description": "合理配置autovacuum参数，避免表膨胀",
+            "config_example": "autovacuum_vacuum_scale_factor = 0.1, autovacuum_vacuum_threshold = 1000"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["large_table"],
+        "key_metrics": ["disk_io_util", "blocked_queries", "running_vacuum", "vacuum_progress"],
+        "related_tools": ["obtain_metric_values", "get_lock_info", "get_table_stats"]
+    }
+}

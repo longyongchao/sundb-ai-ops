@@ -1,0 +1,78 @@
+{
+    "case_id": "case_13_temp_file",
+    "case_name": "临时文件过多",
+    "case_description": "模拟大量排序和哈希操作溢出到磁盘临时文件的场景。临时文件过多会消耗磁盘空间并降低查询性能。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "HighTempFiles",
+    "severity": "warning",
+    "start_time": "1697360000",
+    "end_time": "1697360600",
+    "start_timestamp": "2023-10-15 16:53:20",
+    "end_timestamp": "2023-10-15 17:03:20",
+    "metrics": {
+        "cpu_usage": 0.50,
+        "memory_usage": 0.70,
+        "disk_io_util": 0.75,
+        "disk_io_read_mb": 300,
+        "disk_io_write_mb": 500,
+        "temp_files": 500,
+        "temp_bytes": 21474836480,
+        "temp_file_size_gb": 20,
+        "slow_query_count": 15,
+        "work_mem_mb": 64
+    },
+    "alerts": [
+        {
+            "alertname": "HighTempFiles",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "临时文件数量过多，占用20GB磁盘空间",
+            "summary": "WARN HighTempFiles @localhost:5432 count=500, size=20GB",
+            "startsAt": "2023-10-15T16:55:00.123456789Z"
+        },
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到15条慢查询，可能与临时文件有关",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=15",
+            "startsAt": "2023-10-15T16:56:00.123456789Z"
+        }
+    ],
+    "labels": ["TEMP_FILES", "SORT_OVERFLOW", "LOW_WORK_MEM", "DISK_PRESSURE"],
+    "expected_root_causes": [
+        {
+            "cause": "work_mem设置过小",
+            "description": "work_mem=64MB不足以处理大量排序操作",
+            "confidence": 0.95
+        },
+        {
+            "cause": "大表排序操作",
+            "description": "多个查询对大表进行排序，溢出到磁盘",
+            "confidence": 0.90
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "增加work_mem配置",
+            "description": "提高排序和哈希操作的内存上限",
+            "config_example": "ALTER SYSTEM SET work_mem = '256MB'; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "为排序字段创建索引",
+            "description": "避免排序操作，使用索引顺序",
+            "sql_example": "CREATE INDEX idx_table_sort_col ON table_name(sort_column);"
+        },
+        {
+            "solution": "调整temp_file_limit",
+            "description": "限制单个查询可使用的临时文件大小",
+            "config_example": "ALTER SYSTEM SET temp_file_limit = '10GB'; SELECT pg_reload_conf();"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["large_table", "report_data"],
+        "key_metrics": ["temp_files", "temp_bytes", "disk_io_util", "slow_query_count"],
+        "related_tools": ["obtain_metric_values", "get_slow_queries", "get_setting"]
+    }
+}

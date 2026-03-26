@@ -1,0 +1,79 @@
+{
+    "case_id": "case_08_cpu_mem",
+    "case_name": "CPU和内存同时达到高水位",
+    "case_description": "模拟复杂业务场景下，CPU和内存同时达到高水位。大量并发查询消耗CPU资源，同时排序和哈希操作消耗大量内存，系统面临双重压力。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "MultipleAnomalies",
+    "severity": "critical",
+    "start_time": "1697335000",
+    "end_time": "1697335600",
+    "start_timestamp": "2023-10-15 09:56:40",
+    "end_timestamp": "2023-10-15 10:06:40",
+    "metrics": {
+        "cpu_usage": 0.92,
+        "cpu_user": 0.70,
+        "cpu_system": 0.18,
+        "cpu_iowait": 0.04,
+        "memory_usage": 0.88,
+        "swap_usage": 0.15,
+        "load_1m": 12.5,
+        "active_connections": 120,
+        "slow_query_count": 18,
+        "temp_files": 80,
+        "disk_io_util": 0.65
+    },
+    "alerts": [
+        {
+            "alertname": "NodeCpuHigh",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "CPU使用率达到92%",
+            "summary": "CRITICAL NodeCpuHigh @172.27.58.65:9100 0.92",
+            "startsAt": "2023-10-15T09:57:00.123456789Z"
+        },
+        {
+            "alertname": "NodeMemoryHigh",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "内存使用率达到88%",
+            "summary": "WARN NodeMemoryHigh @172.27.58.65:9100 0.88",
+            "startsAt": "2023-10-15T09:57:30.123456789Z"
+        }
+    ],
+    "labels": ["HIGH_CPU", "HIGH_MEMORY", "CONCURRENT_QUERY", "MIXED_ANOMALY"],
+    "expected_root_causes": [
+        {
+            "cause": "大量并发复杂查询",
+            "description": "120个并发连接执行复杂查询，同时消耗CPU和内存",
+            "confidence": 0.95
+        },
+        {
+            "cause": "work_mem配置过高",
+            "description": "每个查询分配的work_mem过大，导致内存紧张",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "限制并发连接数",
+            "description": "通过连接池控制并发连接数",
+            "config_example": "max_connections = 100, 或使用PgBouncer"
+        },
+        {
+            "solution": "降低work_mem配置",
+            "description": "减少每个查询的内存分配",
+            "config_example": "ALTER SYSTEM SET work_mem = '64MB';"
+        },
+        {
+            "solution": "优化慢查询",
+            "description": "分析并优化执行时间长的SQL",
+            "sql_example": "使用EXPLAIN ANALYZE分析慢查询，添加索引或重写SQL"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["orders", "order_items", "products"],
+        "key_metrics": ["cpu_usage", "memory_usage", "active_connections", "slow_query_count"],
+        "related_tools": ["obtain_metric_values", "get_running_queries", "get_slow_queries"]
+    }
+}

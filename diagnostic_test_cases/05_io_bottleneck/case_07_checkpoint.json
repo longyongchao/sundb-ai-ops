@@ -1,0 +1,99 @@
+{
+    "case_id": "case_07_checkpoint",
+    "case_name": "检查点风暴导致IO瓶颈",
+    "case_description": "模拟高频写入场景下，由于checkpoint配置不当，导致检查点过于频繁且集中，造成IO风暴。系统I/O使用率飙升至100%，严重影响查询性能。",
+    "category": "05_io_bottleneck",
+    "difficulty": "hard",
+    "alert_type": "HighDiskIO",
+    "severity": "critical",
+    "start_time": "1697330000",
+    "end_time": "1697330600",
+    "start_timestamp": "2023-10-15 08:33:20",
+    "end_timestamp": "2023-10-15 08:43:20",
+    "metrics": {
+        "cpu_usage": 0.25,
+        "cpu_iowait": 0.65,
+        "memory_usage": 0.60,
+        "disk_io_util": 0.98,
+        "disk_io_read_mb": 150,
+        "disk_io_write_mb": 850,
+        "disk_iops": 15000,
+        "disk_latency_ms": 45,
+        "checkpoint_count": 25,
+        "checkpoint_write_time": 180,
+        "wal_files": 150,
+        "wal_write_mb": 2048,
+        "bgwriter_lru_maxpages": 100000
+    },
+    "alerts": [
+        {
+            "alertname": "HighDiskIO",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "磁盘I/O使用率达到98%，系统响应缓慢",
+            "summary": "CRITICAL HighDiskIO @172.27.58.65:9100 util=98%",
+            "startsAt": "2023-10-15T08:34:00.123456789Z"
+        },
+        {
+            "alertname": "HighIOWait",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "CPU I/O等待占比65%，存在I/O瓶颈",
+            "summary": "WARN HighIOWait @172.27.58.65:9100 iowait=65%",
+            "startsAt": "2023-10-15T08:35:00.123456789Z"
+        },
+        {
+            "alertname": "FrequentCheckpoint",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检查点过于频繁，10分钟内触发25次",
+            "summary": "WARN FrequentCheckpoint @localhost:5432 count=25",
+            "startsAt": "2023-10-15T08:36:00.123456789Z"
+        }
+    ],
+    "labels": ["IO_BOTTLENECK", "CHECKPOINT_STORM", "HIGH_WRITE"],
+    "expected_root_causes": [
+        {
+            "cause": "检查点间隔过短",
+            "description": "checkpoint_timeout设置过短，导致检查点频繁触发",
+            "confidence": 0.95
+        },
+        {
+            "cause": "检查点写入过于集中",
+            "description": "checkpoint_completion_target设置过小，检查点写入过于集中",
+            "confidence": 0.90
+        },
+        {
+            "cause": "WAL写入量过大",
+            "description": "大量写入操作产生过多WAL日志",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "增加检查点间隔",
+            "description": "将checkpoint_timeout从默认值增加到更长间隔",
+            "config_example": "ALTER SYSTEM SET checkpoint_timeout = '15min'; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "调整检查点完成目标",
+            "description": "增加checkpoint_completion_target使写入更平滑",
+            "config_example": "ALTER SYSTEM SET checkpoint_completion_target = 0.9; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "增加WAL缓冲区",
+            "description": "增加wal_buffers减少WAL写入频率",
+            "config_example": "ALTER SYSTEM SET wal_buffers = '64MB'; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "使用SSD或增加磁盘带宽",
+            "description": "升级存储设备提升I/O性能",
+            "hardware_suggestion": "建议使用NVMe SSD，或增加磁盘阵列带宽"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["sensor_data", "event_logs", "transactions"],
+        "key_metrics": ["disk_io_util", "cpu_iowait", "checkpoint_count", "wal_write_mb"],
+        "related_tools": ["obtain_metric_values", "get_bgwriter_stats", "get_setting"]
+    }
+}

@@ -1,0 +1,29 @@
+o_orderdate >= date '1995-08-01' 
+and o_orderdate < date '1995-08-01' + interval '3' month 
+and exists ( 
+select 
+* 
+from 
+lineitem 
+where 
+l_orderkey = o_orderkey 
+and l_commitdate < l_receiptdate 
+) 
+group by 
+o_orderpriority 
+order by 
+o_orderpriority 
+LIMIT 1; 
+其执行计划为： 
+ 
+2. 对该 SQL 执行诊断： 
+ 
+诊断建议在 lineitem(l_orderkey)上创建索引。 
+3. 按照建议创建索引并获取执行计划： 
+ 
+发现索引对 SQL 提升较大 
+ 
+根因二十二 POOR_JOIN_PERFORMANCE: Join 算子存在以下几种情况，① 在适合使用
+hashjoin 的场景，由于 GUC 参数设置或基数估计误差，导致执行计划没有使用最合适的
+join 算子；② Large join，即 join 涉及元组较多； 
+  情况 1： 

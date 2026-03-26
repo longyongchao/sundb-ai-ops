@@ -1,0 +1,49 @@
+// 科技感主题色彩变量
+$primary-color: #00d4ff;
+$secondary-color: #7b2cbf;
+$accent-color: #00ff88;
+$warning-color: #ffaa00;
+$danger-color: #ff4757;
+$success-color: #00ff88;
+
+// 背景色
+$bg-dark: #030b1a;
+$bg-darker: #010510;
+$bg-card: rgba(10, 22, 40, 0.85);
+$bg-hover: rgba(0, 212, 255, 0.1);
+
+// 边框色
+$border-color: #1e3a5f;
+$border-glow: rgba(0, 212, 255, 0.5);
+
+// 文字色
+$text-primary: #ffffff;
+$text-secondary: rgba(255, 255, 255, 0.7);
+$text-muted: rgba(255, 255, 255, 0.5);
+
+// 渐变
+$gradient-primary: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+$gradient-card: linear-gradient(180deg, rgba(10, 22, 40, 0.9) 0%, rgba(5, 15, 30, 0.95) 100%);
+$gradient-glow: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+
+// 阴影
+$shadow-glow: 0 0 20px rgba(0, 212, 255, 0.3);
+$shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+// 动画
+$transition-fast: 0.2s ease;
+$transition-normal: 0.3s ease;
+$transition-slow: 0.5s ease;
+
+// 间距
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+
+// 圆角
+$radius-sm: 4px;
+$radius-md: 8px;
+$radius-lg: 12px;
+$radius-xl: 16px;

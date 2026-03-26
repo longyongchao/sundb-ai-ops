@@ -1,0 +1,92 @@
+{
+    "case_id": "case_09_query_io",
+    "case_name": "慢查询导致IO瓶颈",
+    "case_description": "模拟慢查询和IO瓶颈的关联场景。大量全表扫描的慢查询导致磁盘读取量激增，IO成为瓶颈，进一步拖慢查询响应时间。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "MultipleAnomalies",
+    "severity": "warning",
+    "start_time": "1697340000",
+    "end_time": "1697340600",
+    "start_timestamp": "2023-10-15 11:20:00",
+    "end_timestamp": "2023-10-15 11:30:00",
+    "metrics": {
+        "cpu_usage": 0.35,
+        "cpu_iowait": 0.55,
+        "memory_usage": 0.55,
+        "disk_io_util": 0.95,
+        "disk_io_read_mb": 800,
+        "disk_io_write_mb": 50,
+        "disk_latency_ms": 35,
+        "slow_query_count": 25,
+        "avg_query_time": 85.5,
+        "seq_scan_count": 200,
+        "cache_hit_ratio": 0.55
+    },
+    "alerts": [
+        {
+            "alertname": "HighDiskIO",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "磁盘I/O使用率达到95%",
+            "summary": "WARN HighDiskIO @172.27.58.65:9100 util=95%",
+            "startsAt": "2023-10-15T11:21:00.123456789Z"
+        },
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到25条慢查询",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=25",
+            "startsAt": "2023-10-15T11:21:30.123456789Z"
+        },
+        {
+            "alertname": "LowCacheHitRatio",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "缓存命中率低，大量磁盘读取",
+            "summary": "WARN LowCacheHitRatio @localhost:5432 ratio=0.55",
+            "startsAt": "2023-10-15T11:22:00.123456789Z"
+        }
+    ],
+    "labels": ["SLOW_QUERY", "IO_BOTTLENECK", "LOW_CACHE_HIT", "FULL_SCAN"],
+    "expected_root_causes": [
+        {
+            "cause": "大量全表扫描查询",
+            "description": "200次顺序扫描导致大量磁盘读取",
+            "confidence": 0.95
+        },
+        {
+            "cause": "缓存命中率低",
+            "description": "shared_buffers不足或热点数据未被缓存",
+            "confidence": 0.85
+        },
+        {
+            "cause": "缺少必要索引",
+            "description": "查询条件字段缺少索引导致全表扫描",
+            "confidence": 0.90
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "为查询条件创建索引",
+            "description": "减少全表扫描，降低磁盘读取",
+            "sql_example": "CREATE INDEX idx_table_column ON table_name(column);"
+        },
+        {
+            "solution": "增加shared_buffers",
+            "description": "提高缓存容量，增加命中率",
+            "config_example": "ALTER SYSTEM SET shared_buffers = '4GB';"
+        },
+        {
+            "solution": "预热热点数据",
+            "description": "启动后预热常用表到缓存",
+            "sql_example": "SELECT pg_prewarm('hot_table');"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["large_table", "logs", "events"],
+        "key_metrics": ["disk_io_util", "slow_query_count", "seq_scan_count", "cache_hit_ratio"],
+        "related_tools": ["obtain_metric_values", "get_slow_queries", "get_index_usage", "get_table_stats"]
+    }
+}

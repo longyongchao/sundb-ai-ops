@@ -1,0 +1,30 @@
+ 
+诊断根因中包含落盘，建议根据实际业务分析是否需要调整 work_mem 的值。 
+ 
+根因十一 VACUUM_EVENT 和根因十二 ANALYZE_EVENT：vacuum/analyze 操作会占用一定
+资源，影响 SQL 执行性能，当前不考虑 
+ 
+根因十三 WORKLOAD_CONTENTION：数据库负载集中影响了 SQL 执行效率，主要包括① 
+数据库自身进程资源消耗异常（CPU、IO 等），其可能是其他大事务或批量操作导致；② 
+数据库 TPS/QPS 较正常情况较大 
+根因十四 CPU_RESOURCE_CONTENTION：数据库外进程 CPU 资源抢占严重，造成数据库进
+程 CPU 资源不足，在具体诊断资源异常时，慢 SQL 诊断工具结合了异常检测算法，对资源
+突增或漂移等情况进行检测，其他根因方法类似 
+根因十五 IO_RESOURCE_CONTENTION：IO 资源紧张，导致部分 SQL 性能较差 
+1. 在场景一种, 模拟 IO 资源抢占，此处主要使用 linux 上的 dd 插件：dd if=/dev/zero 
+of=/media/sdc/test_dir/testfile bs=1K count=8M oflag=append conv=notrunc 
+2. 此时 IOUtils 情况： 
+ 
+可以发现此时 IOUtils 偏高 
+3. 此时运行 SQL：insert into t1 select generate_series(500000, 
+1000000),md5(random()::text), md5(random()::text); 
+ 
+发现执行时间 2.6s 左右 
+4. 运用慢 SQL 诊断， 
+ 
+诊断结果指出当前 IOUtils 超过设定的 0.7 阈值，建议检查是否存在外部进程 IO 资源
+占用。 
+5. 将 IO 占用进程停止，再次运行 SQL： 
+ 
+此时 SQL 性能提升明显。 
+ 

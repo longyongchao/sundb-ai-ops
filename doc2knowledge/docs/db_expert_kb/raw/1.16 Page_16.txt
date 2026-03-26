@@ -1,0 +1,36 @@
+ 
+可以发现根因中说明了 SQL 中存在不能提升的子查询。 
+ 
+根因二十七 POOR_AGGREGATION_PERFORMANCE：AGG 算子代价较大，其主要包括以下几
+个情况，① SQL 结构不优导致优化器不能选择最优的 AGG 算子；②错误的参数设置
+（enable_hashagg,enable_groupagg）导致优化器不能选着正确的算子；③AGG 算子本生
+代价较大 
+  情况一： 
+（1） 场景一中执行 SQL: select c1, count(distinct c2) from t1 group by c1; 
+其执行计划为： 
+ 
+其中 sort+GroupAgg 算子代价较大。 
+（2） 对该 SQL 进行诊断，根因如下： 
+ 
+       根因中说明了该 SQL 结构不优，并给出了对应的改写语句：SELECT c1, 
+COUNT(c2) FROM (SELECT c1, c2 FROM t1 GROUP BY c1, c2) GROUP BY c1; 
+（3） 运行改写语句，执行计划为： 
+ 
+发现改写后性能提升较大。 
+情况二： 
+（1） 先手动设置 enable_hashagg=off； 
+（2） 在 tpch 场景下执行 SQL： 
+select 
+        l_orderkey, 
+        sum(l_extendedprice * (1 - l_discount)) as revenue, 
+        o_orderdate, 
+        o_shippriority 
+from 
+        customer, 
+        orders, 
+        lineitem 
+where 
+        c_mktsegment = 'FURNITURE' 
+        and c_custkey = o_custkey 
+        and l_orderkey = o_orderkey 
+        and o_orderdate < date '1995-03-17' 

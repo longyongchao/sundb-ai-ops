@@ -1,0 +1,161 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
+.installed.cfg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ========================
+# Virtual Environments
+# ========================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.Python
+
+# ========================
+# Node / Frontend
+# ========================
+node_modules/
+webui-react/dist/
+
+# ========================
+# IDE / Editor
+# ========================
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# Logs
+# ========================
+*.log
+*.log.*
+logs/
+controller.log*
+tree_search_diagnosis_*.log
+diagnose_local.log
+diagnose_run_log.txt
+diagnose_run_pid.txt
+
+# ========================
+# Database files
+# ========================
+*.db
+*.db-journal
+*.sqlite3
+*.sqlite3-journal
+knowledge_base/info.db*
+info.db*
+
+# ========================
+# Backup files
+# ========================
+*.bak
+*.bak2
+*.old
+
+# ========================
+# Runtime / Data
+# ========================
+diagnose_run_data.jsonl
+diagnose_run_data_copy.jsonl
+alert_results/
+chroma_db/
+nltk_data/
+stress_test_results/
+m3e-base/
+
+# ========================
+# Configs with secrets (keep examples)
+# ========================
+configs/diagnose_config.py
+configs/kb_config.py
+configs/model_config.py
+configs/server_config.py
+# NOTE: configs/__init__.py and configs/basic_config.py are tracked
+# NOTE: configs/prompt_config.py has no secrets, tracked
+
+# ========================
+# Secrets / Keys
+# ========================
+.env
+openai_keys.txt
+tool_config.yaml
+
+# ========================
+# Test / Coverage
+# ========================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ========================
+# Other
+# ========================
+*.mo
+*.pot
+.mypy_cache/
+.dmypy.json
+.pybuilder/
+.pytype/
+cython_debug/
+.ipynb_checkpoints/
+.ropeproject/
+.spyderproject
+.spyproject
+.scrapy
+.pdm.toml
+__pypackages__/
+celerybeat-schedule
+celerybeat.pid
+chat_history.json
+workload_info.json
+environment.yml
+chromadb_search_results.txt
+classpath.txt
+
+# Large / private directories
+materials/videos/
+multiagents/localized_llms/sentence_embedding/
+doc2knowledge/docs/case_guide/
+doc2knowledge/docs/overall_guide/
+doc2knowledge/docs/private_docs/
+doc2knowledge/docs/overall_diagnosis_knowledge/raw/raw.txt
+tree_of_thought/LLM/my_openai_0613.py
+monitoring_scripts/prometheus/core.py
+others/customllm_test.py

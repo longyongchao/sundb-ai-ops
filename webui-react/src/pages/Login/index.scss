@@ -1,0 +1,164 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a0a14 0%, #1a1a2e 50%, #0f0f1a 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(0, 212, 255, 0.6);
+  border-radius: 50%;
+  animation: float linear infinite;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+.login-card {
+  width: 400px;
+  max-width: 90vw;
+  background: rgba(30, 30, 46, 0.95) !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 212, 255, 0.1);
+  backdrop-filter: blur(10px);
+  z-index: 1;
+  position: relative;
+  box-sizing: border-box;
+  
+  .ant-card-body {
+    padding: 32px 28px;
+    box-sizing: border-box;
+  }
+  
+  .login-header {
+    text-align: center;
+    margin-bottom: 28px;
+    
+    .logo {
+      width: 70px;
+      height: 70px;
+      margin: 0 auto 16px;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(123, 44, 191, 0.2) 100%);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      
+      .logo-icon {
+        font-size: 36px;
+        color: #00d4ff;
+      }
+    }
+    
+    .title {
+      color: #fff;
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 6px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      margin: 0;
+    }
+  }
+  
+  .ant-form {
+    .ant-form-item {
+      margin-bottom: 24px;
+    }
+    
+    .ant-input-affix-wrapper {
+      background: rgba(0, 0, 0, 0.3) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 8px;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      
+      &:hover, &-focused {
+        border-color: rgba(0, 212, 255, 0.5) !important;
+      }
+      
+      .ant-input {
+        background: transparent !important;
+        color: #fff !important;
+        font-size: 14px;
+        
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+      }
+    }
+    
+    .ant-input-prefix {
+      color: rgba(255, 255, 255, 0.5);
+      margin-right: 10px;
+    }
+    
+    .ant-btn-primary {
+      height: 44px;
+      background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%) !important;
+      border: none !important;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+      }
+    }
+  }
+}
+
+.ant-form-item-explain-error {
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 4px;
+}

@@ -1,0 +1,87 @@
+{
+    "case_id": "case_12_connection",
+    "case_name": "连接池耗尽",
+    "case_description": "模拟连接泄漏或连接池配置不当导致的连接耗尽场景。应用无法获取新连接，请求超时失败。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "ConnectionPoolExhausted",
+    "severity": "critical",
+    "start_time": "1697355000",
+    "end_time": "1697355600",
+    "start_timestamp": "2023-10-15 15:30:00",
+    "end_timestamp": "2023-10-15 15:40:00",
+    "metrics": {
+        "cpu_usage": 0.30,
+        "memory_usage": 0.50,
+        "active_connections": 198,
+        "max_connections": 200,
+        "idle_connections": 150,
+        "idle_in_transaction": 40,
+        "waiting_for_connection": 25,
+        "connection_errors": 150,
+        "avg_connection_age_seconds": 1800
+    },
+    "alerts": [
+        {
+            "alertname": "ConnectionPoolExhausted",
+            "severity": "critical",
+            "instance": "localhost:5432",
+            "description": "连接数接近上限 198/200",
+            "summary": "CRITICAL ConnectionPoolExhausted @localhost:5432 198/200",
+            "startsAt": "2023-10-15T15:31:00.123456789Z"
+        },
+        {
+            "alertname": "IdleInTransactionAbundance",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "40个连接处于idle in transaction状态",
+            "summary": "WARN IdleInTransactionAbundance @localhost:5432 count=40",
+            "startsAt": "2023-10-15T15:32:00.123456789Z"
+        }
+    ],
+    "labels": ["CONNECTION_EXHAUSTED", "IDLE_TRANSACTION", "CONNECTION_LEAK"],
+    "expected_root_causes": [
+        {
+            "cause": "连接泄漏",
+            "description": "应用未正确释放数据库连接，导致连接堆积",
+            "confidence": 0.95
+        },
+        {
+            "cause": "空闲事务未提交",
+            "description": "40个连接处于idle in transaction状态，占用连接资源",
+            "confidence": 0.90
+        },
+        {
+            "cause": "连接池配置过小",
+            "description": "max_connections=200无法满足业务需求",
+            "confidence": 0.75
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "终止空闲事务连接",
+            "description": "终止长时间空闲的事务连接",
+            "sql_example": "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle in transaction' AND query_start < now() - interval '10 minutes';"
+        },
+        {
+            "solution": "配置连接超时",
+            "description": "设置idle_in_transaction_session_timeout自动终止空闲事务",
+            "config_example": "ALTER SYSTEM SET idle_in_transaction_session_timeout = '600000'; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "使用连接池",
+            "description": "部署PgBouncer管理连接池",
+            "config_example": "pgbouncer.ini: pool_mode = transaction, max_client_conn = 500, default_pool_size = 20"
+        },
+        {
+            "solution": "检查应用连接管理",
+            "description": "确保应用正确关闭连接，使用try-finally或连接池",
+            "best_practice": "检查应用代码中的连接释放逻辑"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": [],
+        "key_metrics": ["active_connections", "idle_connections", "idle_in_transaction", "connection_errors"],
+        "related_tools": ["obtain_metric_values", "get_connection_stats"]
+    }
+}

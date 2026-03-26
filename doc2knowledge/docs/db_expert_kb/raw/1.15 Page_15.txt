@@ -1,0 +1,25 @@
+        ) as profit 
+group by 
+        nation, 
+        o_year 
+order by 
+        nation, 
+        o_year desc 
+LIMIT 1; 
+执行计划为： 
+ 
+发现执行计划中存在 5 个 join 算子。 
+2. 对该 SQL 执行诊断： 
+ 
+根因中指出该 SQL 包含 5 个 join 算子，一般建议一个 SQL 语句中不超过 2 个 join 算
+子。 
+ 
+根因二十六 CORRELATED_SUBQUERY：SQL 中存在子查询不能提升的场景（todo 为啥没改
+写成功） 
+1. 在场景一中执行 SQL：select * from t1 where t1.c1 in (select t2.c1 from t2 where t1.c1 = 
+t2.c2)； 
+其执行计划为： 
+ 
+由于执行时间太长，因此此处不实际执行，但也可以看出其子查询不能提升，导致
+最终代价非常大。 
+2. 对该 SQL 执行诊断： 

@@ -1,0 +1,88 @@
+{
+    "case_id": "case_16_table_bloat",
+    "case_name": "表膨胀",
+    "case_description": "模拟表膨胀场景。大量更新删除操作后，表空间未释放，实际数据量远小于表占用空间。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "TableBloat",
+    "severity": "warning",
+    "start_time": "1697375000",
+    "end_time": "1697375600",
+    "start_timestamp": "2023-10-15 21:03:20",
+    "end_timestamp": "2023-10-15 21:13:20",
+    "metrics": {
+        "cpu_usage": 0.35,
+        "memory_usage": 0.50,
+        "disk_io_util": 0.45,
+        "table_size_gb": 50,
+        "actual_data_gb": 15,
+        "bloat_ratio": 3.3,
+        "dead_tuple_count": 5000000,
+        "live_tuple_count": 10000000,
+        "seq_scan_count": 200,
+        "last_autovacuum": "2023-10-08 00:00:00"
+    },
+    "alerts": [
+        {
+            "alertname": "TableBloat",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "表膨胀严重，实际数据15GB但占用50GB空间",
+            "summary": "WARN TableBloat @localhost:5432 ratio=3.3",
+            "startsAt": "2023-10-15T21:04:00.123456789Z"
+        },
+        {
+            "alertname": "HighDeadTuples",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "表中存在500万死元组",
+            "summary": "WARN HighDeadTuples @localhost:5432 count=5000000",
+            "startsAt": "2023-10-15T21:05:00.123456789Z"
+        }
+    ],
+    "labels": ["TABLE_BLOAT", "DEAD_TUPLES", "SPACE_WASTE", "VACUUM_NEEDED"],
+    "expected_root_causes": [
+        {
+            "cause": "大量更新删除操作",
+            "description": "频繁的UPDATE/DELETE操作产生大量死元组",
+            "confidence": 0.95
+        },
+        {
+            "cause": "autovacuum未及时执行",
+            "description": "最后autovacuum是一周前，死元组堆积",
+            "confidence": 0.90
+        },
+        {
+            "cause": "autovacuum配置过于保守",
+            "description": "autovacuum_vacuum_scale_factor默认值过大",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "执行VACUUM FULL",
+            "description": "回收空间，但会锁表",
+            "sql_example": "VACUUM FULL table_name;"
+        },
+        {
+            "solution": "使用pg_repack",
+            "description": "在线重建表，不锁表",
+            "sql_example": "pg_repack --table=table_name -d database_name"
+        },
+        {
+            "solution": "调整autovacuum参数",
+            "description": "降低触发阈值，增加执行频率",
+            "config_example": "ALTER TABLE table_name SET (autovacuum_vacuum_scale_factor = 0.05, autovacuum_vacuum_threshold = 1000);"
+        },
+        {
+            "solution": "增加autovacuum worker",
+            "description": "增加并行autovacuum进程数",
+            "config_example": "ALTER SYSTEM SET autovacuum_max_workers = 5; SELECT pg_reload_conf();"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["bloated_table"],
+        "key_metrics": ["bloat_ratio", "dead_tuple_count", "last_autovacuum"],
+        "related_tools": ["obtain_metric_values", "get_table_stats"]
+    }
+}

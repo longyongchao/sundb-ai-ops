@@ -1,0 +1,92 @@
+{
+    "case_id": "case_05_deadlock",
+    "case_name": "多事务交叉更新导致死锁",
+    "case_description": "模拟典型的死锁场景：事务A先更新表X再更新表Y，事务B先更新表Y再更新表X。两个事务互相等待对方释放锁，导致死锁。PostgreSQL检测到死锁后回滚其中一个事务。",
+    "category": "03_lock_contention",
+    "difficulty": "hard",
+    "alert_type": "DeadlockDetected",
+    "severity": "critical",
+    "start_time": "1697320000",
+    "end_time": "1697320300",
+    "start_timestamp": "2023-10-15 05:46:40",
+    "end_timestamp": "2023-10-15 05:51:40",
+    "metrics": {
+        "cpu_usage": 0.35,
+        "memory_usage": 0.50,
+        "active_connections": 150,
+        "waiting_connections": 45,
+        "lock_wait_count": 120,
+        "avg_lock_wait_time": 15.5,
+        "deadlock_count": 3,
+        "blocked_queries": 25,
+        "long_running_transactions": 8
+    },
+    "alerts": [
+        {
+            "alertname": "DeadlockDetected",
+            "severity": "critical",
+            "instance": "localhost:5432",
+            "description": "检测到死锁，已自动回滚事务",
+            "summary": "CRITICAL DeadlockDetected @localhost:5432 count=3",
+            "startsAt": "2023-10-15T05:47:00.123456789Z"
+        },
+        {
+            "alertname": "HighLockWait",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "大量查询处于锁等待状态",
+            "summary": "WARN HighLockWait @localhost:5432 waiting=45",
+            "startsAt": "2023-10-15T05:47:30.123456789Z"
+        }
+    ],
+    "labels": ["DEADLOCK", "LOCK_CONTENTION", "CROSS_UPDATE"],
+    "expected_root_causes": [
+        {
+            "cause": "事务访问顺序不一致",
+            "description": "多个事务以不同顺序访问相同资源，形成循环等待",
+            "confidence": 0.98
+        },
+        {
+            "cause": "长事务持有锁",
+            "description": "存在8个长运行事务，长时间持有锁资源",
+            "confidence": 0.85
+        },
+        {
+            "cause": "高并发竞争",
+            "description": "150个活跃连接竞争热点数据",
+            "confidence": 0.80
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "统一资源访问顺序",
+            "description": "确保所有事务按相同顺序访问表和行",
+            "sql_example": "-- 所有事务都按 表A -> 表B 的顺序更新\nBEGIN;\nUPDATE table_a SET ... WHERE id = 1;\nUPDATE table_b SET ... WHERE id = 1;\nCOMMIT;"
+        },
+        {
+            "solution": "缩短事务持有锁时间",
+            "description": "减少事务中的非必要操作，尽快提交",
+            "best_practice": "将非数据库操作移到事务外，减少事务持续时间"
+        },
+        {
+            "solution": "使用乐观锁替代悲观锁",
+            "description": "使用版本号或时间戳实现乐观并发控制",
+            "sql_example": "UPDATE products SET stock = stock - 1, version = version + 1 WHERE id = 1 AND version = 10;"
+        },
+        {
+            "solution": "设置锁超时",
+            "description": "配置合理的锁等待超时时间",
+            "config_example": "SET lock_timeout = '10s';"
+        },
+        {
+            "solution": "增加热点数据索引",
+            "description": "减少锁定的行数和范围",
+            "sql_example": "CREATE INDEX idx_products_id ON products(id);"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["accounts", "transactions", "orders"],
+        "key_metrics": ["deadlock_count", "lock_wait_count", "waiting_connections", "long_running_transactions"],
+        "related_tools": ["obtain_metric_values", "get_lock_info", "get_blocking_queries", "get_long_transactions"]
+    }
+}

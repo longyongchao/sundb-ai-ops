@@ -1,0 +1,185 @@
+// MainLayout 样式 - 科技感未来感主题
+.main-layout {
+  min-height: 100vh;
+  height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+  overflow: hidden;
+}
+
+.ant-layout {
+  background: transparent;
+}
+
+.main-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  background: rgba(10, 10, 20, 0.95) !important;
+  border-right: 1px solid rgba(0, 212, 255, 0.2);
+
+  .ant-menu {
+    background: transparent;
+    border: none;
+
+    .ant-menu-item {
+      color: rgba(255, 255, 255, 0.7);
+      margin: 8px 0;
+      border-radius: 8px;
+
+      &:hover {
+        color: #00d4ff;
+        background: rgba(0, 212, 255, 0.1);
+      }
+
+      &.ant-menu-item-selected {
+        color: #00d4ff;
+        background: linear-gradient(90deg, rgba(0, 212, 255, 0.2), transparent);
+        border-left: 3px solid #00d4ff;
+      }
+    }
+  }
+
+  .logo {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    
+    h1 {
+      color: #00d4ff;
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+    }
+  }
+
+  .sider-footer {
+    padding: 16px;
+    border-top: 1px solid rgba(0, 212, 255, 0.2);
+    background: rgba(10, 10, 20, 0.95);
+  }
+
+  .system-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+
+      .status-icon {
+        color: #52c41a;
+        font-size: 14px;
+
+        &.online {
+          color: #52c41a;
+        }
+      }
+
+      span {
+        color: rgba(255, 255, 255, 0.7);
+      }
+    }
+  }
+}
+
+.header {
+  background: rgba(10, 10, 20, 0.9) !important;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+
+    .collapse-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 10px !important;
+      background: rgba(0, 212, 255, 0.1) !important;
+      border: 1px solid rgba(0, 212, 255, 0.2) !important;
+      transition: all 0.3s ease !important;
+
+      .anticon {
+        font-size: 18px !important;
+        color: #00d4ff !important;
+      }
+
+      &:hover {
+        background: rgba(0, 212, 255, 0.2) !important;
+        border-color: rgba(0, 212, 255, 0.4) !important;
+        transform: scale(1.05);
+      }
+
+      &:active {
+        transform: scale(0.95);
+      }
+    }
+  }
+
+  .header-title {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 500;
+  }
+}
+
+.content {
+  padding: 24px;
+  background: transparent;
+  height: calc(100vh - 64px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.content-wrapper {
+  height: 100%;
+}
+
+.ant-card {
+  background: rgba(20, 20, 40, 0.8) !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  border-radius: 12px !important;
+
+  .ant-card-head {
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    color: #ffffff;
+  }
+
+  .ant-card-body {
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 4px;
+}

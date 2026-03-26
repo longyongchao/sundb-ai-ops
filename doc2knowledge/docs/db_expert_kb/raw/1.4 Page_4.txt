@@ -1,0 +1,31 @@
+ 
+发现根因中存在： 
+（1）批量插入导致性能较差； 
+（2）无用索引可以删除； 
+（3）过多索引导致插入性能较差； 
+ 
+6. 按照根因描述，删除其中的无用索引或冗余索引，再次执行该语句，执行计划如
+下： 
+ 
+此时执行时间缩短为 13s 左右，提升较大。 
+ 
+根因六 UPDATE_LARGE_TABLE：和 INSERT_LARGE_DATA类似 
+1. 对表 t1 执行 SQL：update t1 set c1='1234567890' where id < 9000000; 
+2. 对 SQL 执行慢 SQL 诊断： 
+ 
+      根因中指出存在批量更新（t1: 2999861）。 
+ 
+根因八 DELETE_LARGE_DATA：和 INSERT_LARGE_DATA类似 
+1. 对表 t1 执行 SQL: delete from t1 where id > 9000000; 
+2. 对 SQL 执行慢 SQL 诊断： 
+ 
+根因中指出存在批量删除（t1: 2990904）。 
+ 
+ 根因十 DISK_SPILL：SQL 执行过程中产生 SORT 或 HASH 算子产生落盘行为 
+1. 将数据库 work_mem 参数设置成 64kB: gs_guc reload -D /media/sdd/lk_new/data -c 
+"work_mem=64kB" 
+2. 往表 t2 中插入数据：insert into t2 select generate_series(0, 
+10000000),md5(random()::text), md5(random()::text); 
+3. 执行 SQL：select c1, count(distinct c2) from t1 group by c1, c2;执行计划： 
+ 
+4. 对慢 SQL 执行诊断： 

@@ -1,0 +1,22 @@
+慢 SQL 根因测试 
+测试中用到的： 
+场景一 
+创建表 t1 和 t2: 
+create table t1(id int, c1 text, c2 text); 
+create table t2(id int, c1 text, c2 text); 
+ 
+插入测试数据（提供参考）： 
+  insert into t1 select generate_series(1,10000000),md5(random()::text), 
+md5(random()::text); 
+insert in to t2 select generate_series(1 ,10000000),md5(random()::text), 
+md5(random()::text); 
+ 
+ 
+  场景二 
+TPCH 场景， 因为TPCH 场景中的 SQL 语句， 基本都可以认为是慢SQL. 此处， 我们以该
+类型的 SQL 语句为例， 进行测试， 看一下我们的功能是否可以覆盖TPCH 中的问题场景。 其
+中，TPCH 的 22 条语句，其对应的慢 SQL 根因有很多论文在研究。因此，该根因也比较容
+易对照正误。 
+ 
+说明：上述场景只是为了对慢 SQL 根因诊断进行讲解，用户可以使用已有的场景进行测试。 
+  

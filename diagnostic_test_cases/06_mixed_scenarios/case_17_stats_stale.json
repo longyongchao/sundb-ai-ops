@@ -1,0 +1,78 @@
+{
+    "case_id": "case_17_stats_stale",
+    "case_name": "统计信息过期",
+    "case_description": "模拟统计信息过期场景。表数据发生大量变化后，统计信息未更新，导致优化器选择错误的执行计划。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "easy",
+    "alert_type": "StaleStatistics",
+    "severity": "warning",
+    "start_time": "1697380000",
+    "end_time": "1697380600",
+    "start_timestamp": "2023-10-15 22:26:40",
+    "end_timestamp": "2023-10-15 22:36:40",
+    "metrics": {
+        "cpu_usage": 0.45,
+        "memory_usage": 0.50,
+        "slow_query_count": 8,
+        "seq_scan_count": 150,
+        "idx_scan_count": 20,
+        "table_row_count_actual": 5000000,
+        "table_row_count_stats": 100000,
+        "last_analyze": "2023-10-01 00:00:00",
+        "rows_changed_since_analyze": 4900000,
+        "query_plan_mismatch": true
+    },
+    "alerts": [
+        {
+            "alertname": "StaleStatistics",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "表统计信息过期，实际行数与统计相差50倍",
+            "summary": "WARN StaleStatistics @localhost:5432 actual=5000000, stats=100000",
+            "startsAt": "2023-10-15T22:28:00.123456789Z"
+        },
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到8条慢查询，可能与统计信息过期有关",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=8",
+            "startsAt": "2023-10-15T22:29:00.123456789Z"
+        }
+    ],
+    "labels": ["STALE_STATS", "QUERY_PLAN_ISSUE", "ANALYZE_NEEDED"],
+    "expected_root_causes": [
+        {
+            "cause": "统计信息过期",
+            "description": "最后ANALYZE是两周前，数据量已增长50倍",
+            "confidence": 0.98
+        },
+        {
+            "cause": "优化器选择错误计划",
+            "description": "统计信息不准确导致优化器选择了全表扫描而非索引扫描",
+            "confidence": 0.95
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "手动执行ANALYZE",
+            "description": "更新表统计信息",
+            "sql_example": "ANALYZE table_name;"
+        },
+        {
+            "solution": "调整autovacuum_analyze参数",
+            "description": "降低自动分析触发阈值",
+            "config_example": "ALTER TABLE table_name SET (autovacuum_analyze_scale_factor = 0.02);"
+        },
+        {
+            "solution": "批量数据导入后执行ANALYZE",
+            "description": "在批量导入数据后立即更新统计信息",
+            "best_practice": "在ETL流程中添加ANALYZE步骤"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["rapidly_growing_table"],
+        "key_metrics": ["last_analyze", "rows_changed_since_analyze", "seq_scan_count"],
+        "related_tools": ["obtain_metric_values", "get_table_stats", "get_query_plan"]
+    }
+}

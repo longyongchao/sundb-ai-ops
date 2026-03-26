@@ -1,0 +1,1408 @@
+// 全局样式 - 科技感未来感主题
+@use './variables.scss' as *;
+
+// ============================================
+// Alert 警告框样式 - 暗色主题
+// ============================================
+
+.ant-alert {
+    background-color: rgba(30, 30, 46, 0.9) !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+    border-radius: 8px !important;
+}
+
+.ant-alert-message {
+    color: rgba(255, 255, 255, 0.95) !important;
+    font-weight: 600 !important;
+}
+
+.ant-alert-description {
+    color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.ant-alert-icon {
+    color: inherit !important;
+}
+
+.ant-alert-success {
+    background-color: rgba(82, 196, 26, 0.1) !important;
+    border-color: rgba(82, 196, 26, 0.3) !important;
+    
+    .ant-alert-icon, .ant-alert-message {
+        color: #52c41a !important;
+    }
+}
+
+.ant-alert-error {
+    background-color: rgba(255, 77, 79, 0.1) !important;
+    border-color: rgba(255, 77, 79, 0.3) !important;
+    
+    .ant-alert-icon, .ant-alert-message {
+        color: #ff4d4f !important;
+    }
+}
+
+.ant-alert-warning {
+    background-color: rgba(250, 173, 20, 0.1) !important;
+    border-color: rgba(250, 173, 20, 0.3) !important;
+    
+    .ant-alert-icon, .ant-alert-message {
+        color: #faad14 !important;
+    }
+}
+
+.ant-alert-info {
+    background-color: rgba(0, 212, 255, 0.1) !important;
+    border-color: rgba(0, 212, 255, 0.3) !important;
+    
+    .ant-alert-icon, .ant-alert-message {
+        color: #00d4ff !important;
+    }
+}
+
+.ant-alert-close-icon {
+    color: rgba(255, 255, 255, 0.45) !important;
+    
+    &:hover {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+}
+
+// ============================================
+// 下拉菜单 - 统一暗色主题
+// ============================================
+
+/* 下拉菜单弹出层 - 暗色主题 */
+.ant-select-dropdown,
+.ant-dropdown-menu,
+.ant-cascader-dropdown,
+.ant-picker-dropdown {
+    background-color: #1e1e2e !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 下拉菜单选项 - 白色文字 */
+.ant-select-item-option-content,
+.ant-select-selection-item,
+.ant-dropdown-menu-item,
+.ant-cascader-menu-item {
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-weight: 500 !important;
+}
+
+/* 下拉菜单选项悬停 */
+.ant-select-item-option-active,
+.ant-select-item:hover,
+.ant-dropdown-menu-item:hover,
+.ant-cascader-menu-item-active {
+    background-color: rgba(0, 212, 255, 0.15) !important;
+    color: #00d4ff !important;
+}
+
+/* 下拉菜单选中项 */
+.ant-select-item-option-selected {
+    background-color: rgba(0, 212, 255, 0.2) !important;
+    color: #00d4ff !important;
+    font-weight: 600 !important;
+}
+
+/* 输入框内的选择器 */
+.ant-select-selector {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(0, 212, 255, 0.3) !important;
+}
+
+.ant-select-selection-item {
+    color: #ffffff !important;
+}
+
+.ant-select-selection-placeholder {
+    color: rgba(255, 255, 255, 0.55) !important;
+}
+
+.ant-select-arrow {
+    color: #ffffff !important;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px !important;
+  font-weight: 500;
+  background: $bg-dark;
+  color: #FFFFFF !important;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+// 全局输入框字体增强
+input, textarea, select, .ant-input, .ant-select-selector {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #FFFFFF !important;
+}
+
+// 全局输入框 placeholder 样式 - 清晰可见但不刺眼
+::placeholder,
+::-webkit-input-placeholder,
+::-moz-placeholder,
+:-ms-input-placeholder {
+  color: rgba(255, 255, 255, 0.55) !important;
+  opacity: 1 !important;
+}
+
+.ant-input::placeholder,
+.ant-input-affix-wrapper input::placeholder,
+.ant-select-selection-placeholder,
+.ant-picker-input input::placeholder,
+.ant-input-search input::placeholder {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+// 下拉选择器 placeholder
+.ant-select-selection-placeholder {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+// 日期选择器 placeholder
+.ant-picker-input > input::placeholder {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+// 全局标签字体增强
+label, .ant-form-item-label, .ant-card-head-title {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #FFFFFF !important;
+}
+
+// 移除所有模糊效果
+* {
+  filter: none !important;
+}
+
+// 高对比度文本
+h1, h2, h3, h4, h5, h6 {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+p, span, div {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+// 全局滚动条样式
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+  
+  &:hover {
+    background: rgba(0, 212, 255, 0.5);
+  }
+}
+
+// 科技感发光效果
+.glow-effect {
+  box-shadow: $shadow-glow;
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+// 渐变边框
+.gradient-border {
+  position: relative;
+  background: $bg-card;
+  border-radius: $radius-lg;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: $radius-lg;
+    padding: 1px;
+    background: $gradient-primary;
+    -webkit-mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: 
+      linear-gradient(#fff 0 0) content-box, 
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+// 科技感卡片
+.tech-card {
+  background: $bg-card;
+  border: 1px solid $border-color;
+  border-radius: $radius-lg;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: all $transition-normal;
+  
+  &:hover {
+    border-color: $border-glow;
+    box-shadow: $shadow-glow;
+    transform: translateY(-2px);
+  }
+}
+
+// 动画关键帧
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes data-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes blink {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+// 状态指示器
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: pulse-glow 2s infinite;
+  }
+  
+  &.online::before {
+    background: $success-color;
+  }
+  
+  &.offline::before {
+    background: $danger-color;
+  }
+  
+  &.warning::before {
+    background: $warning-color;
+  }
+}
+
+// 数据流动效果
+.data-flow-bg {
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.1) 50%, 
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: data-flow 3s linear infinite;
+}
+
+// 网格背景
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+// Ant Design 组件样式覆盖
+.ant-layout {
+  background: $bg-dark !important;
+}
+
+.ant-layout-sider {
+  background: $bg-darker !important;
+  border-right: 1px solid $border-color !important;
+}
+
+.ant-menu-dark {
+  background: transparent !important;
+  
+  .ant-menu-item {
+    margin: 4px 8px !important;
+    border-radius: $radius-md !important;
+    
+    &:hover {
+      background: $bg-hover !important;
+    }
+    
+    &.ant-menu-item-selected {
+      background: rgba(0, 212, 255, 0.15) !important;
+      
+      &::after {
+        border-right-color: $primary-color !important;
+      }
+    }
+  }
+}
+
+.ant-card {
+  background: $bg-card !important;
+  border: 1px solid $border-color !important;
+  border-radius: $radius-lg !important;
+  
+  .ant-card-head {
+    border-bottom-color: $border-color !important;
+    color: $text-primary !important;
+    background: transparent !important;
+  }
+}
+
+// ============================================
+// Tag 标签样式 - 暗色主题
+// ============================================
+.ant-tag {
+  border-color: transparent !important;
+  
+  // 默认蓝色标签
+  &.ant-tag-blue {
+    background-color: rgba(0, 212, 255, 0.15) !important;
+    color: #00d4ff !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+  }
+  
+  // 绿色标签
+  &.ant-tag-green {
+    background-color: rgba(82, 196, 26, 0.15) !important;
+    color: #52c41a !important;
+    border: 1px solid rgba(82, 196, 26, 0.3) !important;
+  }
+  
+  // 红色标签
+  &.ant-tag-red {
+    background-color: rgba(255, 77, 79, 0.15) !important;
+    color: #ff4d4f !important;
+    border: 1px solid rgba(255, 77, 79, 0.3) !important;
+  }
+  
+  // 橙色标签
+  &.ant-tag-orange {
+    background-color: rgba(250, 173, 20, 0.15) !important;
+    color: #faad14 !important;
+    border: 1px solid rgba(250, 173, 20, 0.3) !important;
+  }
+  
+  // 紫色标签
+  &.ant-tag-purple {
+    background-color: rgba(114, 46, 209, 0.15) !important;
+    color: #7b2cbf !important;
+    border: 1px solid rgba(114, 46, 209, 0.3) !important;
+  }
+  
+  // 黄色标签
+  &.ant-tag-yellow {
+    background-color: rgba(250, 173, 20, 0.15) !important;
+    color: #faad14 !important;
+    border: 1px solid rgba(250, 173, 20, 0.3) !important;
+  }
+  
+  // 成功标签
+  &.ant-tag-success {
+    background-color: rgba(82, 196, 26, 0.15) !important;
+    color: #52c41a !important;
+  }
+  
+  // 警告标签
+  &.ant-tag-warning {
+    background-color: rgba(250, 173, 20, 0.15) !important;
+    color: #faad14 !important;
+  }
+  
+  // 错误标签
+  &.ant-tag-error {
+    background-color: rgba(255, 77, 79, 0.15) !important;
+    color: #ff4d4f !important;
+  }
+}
+
+// ============================================
+// Progress 进度条样式
+// ============================================
+.ant-progress {
+  .ant-progress-inner {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .ant-progress-text {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+}
+
+// ============================================
+// Descriptions 描述列表样式
+// ============================================
+.ant-descriptions {
+  .ant-descriptions-item-label {
+    background-color: rgba(0, 0, 0, 0.2) !important;
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-descriptions-item-content {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-descriptions-row {
+    border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+  }
+}
+
+// ============================================
+// Tabs 标签页样式
+// ============================================
+.ant-tabs {
+  .ant-tabs-tab {
+    color: rgba(255, 255, 255, 0.65) !important;
+    
+    &:hover {
+      color: #00d4ff !important;
+    }
+    
+    &.ant-tabs-tab-active {
+      .ant-tabs-tab-btn {
+        color: #00d4ff !important;
+      }
+    }
+  }
+  
+  .ant-tabs-ink-bar {
+    background: #00d4ff !important;
+  }
+  
+  .ant-tabs-nav {
+    &::before {
+      border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+    }
+  }
+}
+
+// ============================================
+// Timeline 时间线样式
+// ============================================
+.ant-timeline {
+  .ant-timeline-item-content {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  .ant-timeline-item-tail {
+    border-left-color: rgba(255, 255, 255, 0.1) !important;
+  }
+}
+
+// ============================================
+// Statistic 统计数值样式
+// ============================================
+.ant-statistic {
+  .ant-statistic-title {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+  
+  .ant-statistic-content {
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+}
+
+// ============================================
+// Divider 分割线样式
+// ============================================
+.ant-divider {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  
+  .ant-divider-inner-text {
+    color: rgba(255, 255, 255, 0.65) !important;
+  }
+}
+
+.ant-table {
+  background: transparent !important;
+  
+  .ant-table-thead > tr > th {
+    background: rgba(0, 212, 255, 0.1) !important;
+    border-bottom-color: $border-color !important;
+    color: $text-primary !important;
+  }
+  
+  .ant-table-tbody > tr > td {
+    border-bottom-color: $border-color !important;
+    color: $text-secondary !important;
+  }
+  
+  .ant-table-tbody > tr:hover > td {
+    background: $bg-hover !important;
+  }
+}
+
+.ant-btn-primary {
+  background: $gradient-primary !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3) !important;
+  
+  &:hover {
+    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5) !important;
+    transform: translateY(-1px);
+  }
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: $border-color !important;
+  color: $text-primary !important;
+  
+  &:hover,
+  &:focus {
+    border-color: $primary-color !important;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.1) !important;
+  }
+}
+
+.ant-modal-content {
+  background: $bg-card !important;
+  border: 1px solid $border-color !important;
+  border-radius: $radius-lg !important;
+  
+  .ant-modal-header {
+    background: transparent !important;
+    border-bottom-color: $border-color !important;
+    
+    .ant-modal-title {
+      color: $text-primary !important;
+    }
+  }
+  
+  .ant-modal-body {
+    color: $text-secondary !important;
+  }
+}
+
+.ant-message-notice-content {
+  background: $bg-card !important;
+  border: 1px solid $border-color !important;
+  color: $text-primary !important;
+}
+
+// 工具类
+.text-gradient {
+  background: $gradient-primary;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.animate-pulse {
+  animation: pulse-glow 2s infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-rotate {
+  animation: rotate 10s linear infinite;
+}
+
+// ============================================
+// 日期选择器下拉 - 暗色主题
+// ============================================
+.ant-picker-dropdown {
+  .ant-picker-panel-container {
+    background-color: #1e1e2e !important;
+    border: 2px solid #00d4ff !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  }
+  
+  .ant-picker-header {
+    background-color: #1e1e2e !important;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.3) !important;
+    
+    button {
+      color: #e0e0e0 !important;
+      
+      &:hover {
+        color: #00d4ff !important;
+      }
+    }
+  }
+  
+  .ant-picker-content th {
+    color: #00d4ff !important;
+    font-weight: 600 !important;
+  }
+  
+  .ant-picker-content td {
+    color: #e0e0e0 !important;
+    
+    &.ant-picker-cell {
+      color: #e0e0e0 !important;
+    }
+  }
+  
+  .ant-picker-cell:hover .ant-picker-cell-inner {
+    background-color: rgba(0, 212, 255, 0.2) !important;
+  }
+  
+  .ant-picker-cell-selected .ant-picker-cell-inner {
+    background-color: #00d4ff !important;
+    color: #000000 !important;
+    font-weight: 600 !important;
+  }
+  
+  .ant-picker-cell-in-view {
+    color: #e0e0e0 !important;
+  }
+  
+  .ant-picker-cell-today .ant-picker-cell-inner::before {
+    border-color: #00d4ff !important;
+  }
+  
+  .ant-picker-footer {
+    background-color: #1e1e2e !important;
+    border-top: 1px solid rgba(0, 212, 255, 0.3) !important;
+  }
+  
+  .ant-picker-range-arrow {
+    &::before {
+      background: #1e1e2e !important;
+      border: 1px solid #00d4ff !important;
+    }
+  }
+}
+
+// 暗色日期选择器类
+.dark-datepicker {
+  .ant-picker-panel-container {
+    background-color: #1e1e2e !important;
+    border: 2px solid #00d4ff !important;
+  }
+  
+  .ant-picker-header,
+  .ant-picker-content th,
+  .ant-picker-content td {
+    color: #e0e0e0 !important;
+  }
+  
+  .ant-picker-cell-selected .ant-picker-cell-inner {
+    background-color: #00d4ff !important;
+    color: #000000 !important;
+  }
+}
+
+// ============================================
+// 表格筛选下拉框
+// ============================================
+.ant-table-filter-dropdown {
+  background-color: #ffffff !important;
+  border: 2px solid #1890ff !important;
+  
+  .ant-table-filter-dropdown-btns {
+    border-top-color: #d9d9d9 !important;
+  }
+}
+
+// ============================================
+// 多选标签
+// ============================================
+.ant-select-selection-item-remove {
+  color: rgba(0, 0, 0, 0.7) !important;
+  
+  &:hover {
+    color: #ff4d4f !important;
+  }
+}
+
+// ============================================
+// Modal 弹窗 - 深色主题协调
+// ============================================
+.ant-modal-root,
+.ant-modal-wrap {
+  .ant-modal {
+    .ant-modal-content {
+      background-color: rgba(30, 35, 45, 0.98) !important;
+      border: 1px solid rgba(0, 212, 255, 0.3) !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+      -webkit-backdrop-filter: blur(10px) !important;
+      backdrop-filter: blur(10px) !important;
+    }
+    
+    .ant-modal-header {
+      background-color: transparent !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+      padding: 16px 24px !important;
+    }
+    
+    .ant-modal-title {
+      color: #00d4ff !important;
+      font-size: 16px !important;
+      font-weight: 600 !important;
+    }
+    
+    .ant-modal-body {
+      background-color: transparent !important;
+      color: rgba(255, 255, 255, 0.9) !important;
+      font-size: 14px !important;
+      font-weight: 400 !important;
+      padding: 24px !important;
+    }
+    
+    .ant-modal-footer {
+      background-color: transparent !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+      padding: 12px 24px !important;
+    }
+    
+    // 弹窗内的输入框
+    .ant-input,
+    .ant-input-affix-wrapper {
+      background-color: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #ffffff !important;
+      
+      &::placeholder {
+        color: rgba(255, 255, 255, 0.55) !important;
+      }
+      
+      &:hover,
+      &:focus {
+        border-color: #00d4ff !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+      }
+    }
+    
+    .ant-input-textarea textarea {
+      background-color: rgba(255, 255, 255, 0.08) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    // 弹窗内的分隔线
+    .ant-divider {
+      border-color: rgba(255, 255, 255, 0.15) !important;
+      
+      .ant-divider-inner-text {
+        color: rgba(255, 255, 255, 0.8) !important;
+        font-weight: 500 !important;
+      }
+    }
+    
+    // 弹窗内的标签
+    .ant-tag {
+      border-color: transparent !important;
+    }
+    
+    // 弹窗内的上传区域
+    .ant-upload-drag {
+      background-color: rgba(255, 255, 255, 0.05) !important;
+      border: 2px dashed rgba(255, 255, 255, 0.2) !important;
+      
+      &:hover {
+        border-color: #00d4ff !important;
+        background-color: rgba(0, 212, 255, 0.1) !important;
+      }
+      
+      .ant-upload-text {
+        color: rgba(255, 255, 255, 0.9) !important;
+      }
+      
+      .ant-upload-hint {
+        color: rgba(255, 255, 255, 0.5) !important;
+      }
+    }
+    
+    // 弹窗内的按钮
+    .ant-btn-default {
+      color: rgba(255, 255, 255, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.2) !important;
+      background: rgba(255, 255, 255, 0.1) !important;
+      
+      &:hover {
+        color: #00d4ff !important;
+        border-color: #00d4ff !important;
+        background: rgba(0, 212, 255, 0.15) !important;
+      }
+    }
+    
+    .ant-btn-primary {
+      background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%) !important;
+      color: #000000 !important;
+      border: none !important;
+      font-weight: 600 !important;
+      
+      &:hover {
+        background: linear-gradient(135deg, #33ddff 0%, #00b3e6 100%) !important;
+      }
+    }
+    
+    // 弹窗内的关闭按钮
+    .ant-modal-close {
+      color: rgba(255, 255, 255, 0.5) !important;
+      
+      &:hover {
+        color: #ff4d4f !important;
+      }
+    }
+    
+    // 弹窗内文本颜色
+    strong, b {
+      color: #ffffff !important;
+    }
+    
+    li, ul {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+  }
+}
+
+// Popconfirm 确认弹窗
+.ant-popconfirm {
+  .ant-popover-inner {
+    background-color: #ffffff !important;
+    border: 2px solid #1890ff !important;
+  }
+  
+  .ant-popover-message-title {
+    color: #333333 !important;
+    font-weight: 500 !important;
+  }
+  
+  .ant-popover-message-icon {
+    color: #faad14 !important;
+  }
+  
+  .ant-btn {
+    color: #333333 !important;
+  }
+  
+  .ant-btn-primary {
+    color: #ffffff !important;
+  }
+}
+
+// ============================================
+// 知识库页面特殊样式
+// ============================================
+.knowledge-page {
+  .ant-alert {
+    background-color: rgba(24, 144, 255, 0.1) !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+    
+    .ant-alert-message {
+      color: #00d4ff !important;
+      font-weight: 600 !important;
+    }
+    
+    .ant-alert-description {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+  }
+}
+
+// ============================================
+// 聊天页面特殊样式
+// ============================================
+.knowledge-chat-page {
+  .ant-card-body {
+    background: transparent !important;
+  }
+  
+  // 聊天消息区域
+  .ant-card-body > div:first-child {
+    background: rgba(0, 0, 0, 0.2) !important;
+    border-radius: 8px;
+  }
+  
+  // Markdown 内容样式 - 暗色主题
+  .markdown-content {
+    color: #f0f0f0 !important;
+    font-size: 14px;
+    line-height: 1.6;
+    
+    h1, h2, h3, h4, h5, h6 {
+      color: #f0f0f0 !important;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+    
+    p {
+      color: #f0f0f0 !important;
+      margin-bottom: 8px;
+    }
+    
+    code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+      color: #7dd3fc;
+    }
+    
+    pre {
+      background: #1e1e2e;
+      color: #abb2bf;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      
+      code {
+        background: transparent;
+        color: #abb2bf;
+      }
+    }
+    
+    ul, ol {
+      padding-left: 20px;
+      color: #f0f0f0 !important;
+      
+      li {
+        color: #f0f0f0 !important;
+        margin-bottom: 4px;
+      }
+    }
+    
+    strong {
+      color: #f0f0f0 !important;
+      font-weight: 600;
+    }
+    
+    a {
+      color: #64b5f6;
+    }
+  }
+}
+
+// ============================================
+// 侧边栏和头部图标样式统一
+// ============================================
+
+// 侧边栏菜单图标大小统一
+.sider {
+  .ant-menu-item {
+    .anticon {
+      font-size: 16px !important;
+      margin-right: 10px !important;
+    }
+  }
+}
+
+// Logo 图标样式
+.logo-container {
+  .logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(123, 44, 191, 0.2) 100%);
+    border-radius: 8px;
+    margin-right: 12px;
+    
+    .anticon {
+      font-size: 20px !important;
+      color: #00d4ff !important;
+    }
+  }
+  
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+    
+    .text-gradient {
+      font-size: 16px !important;
+      font-weight: 600 !important;
+      background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .logo-subtitle {
+      font-size: 11px !important;
+      color: rgba(255, 255, 255, 0.5) !important;
+      margin-top: 2px;
+    }
+  }
+}
+
+// 头部右侧图标按钮统一
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .header-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    
+    .anticon {
+      font-size: 16px !important;
+      color: rgba(255, 255, 255, 0.7) !important;
+    }
+    
+    &:hover {
+      background: rgba(0, 212, 255, 0.1) !important;
+      
+      .anticon {
+        color: #00d4ff !important;
+      }
+    }
+  }
+  
+  // Badge 样式调整
+  .ant-badge {
+    .ant-badge-count {
+      font-size: 10px !important;
+      min-width: 16px !important;
+      height: 16px !important;
+      line-height: 16px !important;
+    }
+  }
+}
+
+// 用户头像区域
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .user-avatar {
+    background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 100%);
+    
+    .anticon {
+      font-size: 14px !important;
+    }
+  }
+  
+  .user-name {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+  }
+}
+
+// 侧边栏底部状态图标
+.sider-footer {
+  .status-icon {
+    font-size: 14px !important;
+    margin-right: 8px;
+    
+    &.online {
+      color: #00ff88 !important;
+    }
+  }
+}
+
+// ============================================
+// 通知下拉菜单样式
+// ============================================
+.ant-dropdown {
+  .ant-dropdown-menu,
+  .ant-dropdown-content {
+    background-color: #1e1e2e !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  }
+  
+  // 通知列表项
+  .ant-list-item {
+    &:hover {
+      background-color: rgba(0, 212, 255, 0.1) !important;
+    }
+  }
+  
+  // 下拉菜单项
+  .ant-dropdown-menu-item {
+    color: rgba(255, 255, 255, 0.85) !important;
+    
+    &:hover {
+      background-color: rgba(0, 212, 255, 0.1) !important;
+      color: #00d4ff !important;
+    }
+  }
+  
+  .ant-dropdown-menu-item-divider {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+// ============================================
+// Markdown 内容样式 - 诊断页面
+// ============================================
+.markdown-content {
+  color: #e6e6e6 !important;
+  font-size: 14px;
+  line-height: 2;
+  
+  h1, h2, h3, h4, h5, h6 {
+    color: #ffffff !important;
+    margin-top: 20px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    display: block;
+    clear: both;
+  }
+  
+  h1 { font-size: 20px; }
+  h2 { font-size: 18px; }
+  h3 { 
+    font-size: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 24px;
+  }
+  h4 { font-size: 15px; }
+  
+  p {
+    color: #e6e6e6 !important;
+    margin-bottom: 12px;
+    display: block;
+  }
+  
+  code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: #7ec699;
+    font-size: 13px;
+  }
+  
+  pre {
+    background: #1a1a1a;
+    color: #7ec699;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid #3a3a3a;
+    margin: 16px 0;
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    
+    code {
+      background: transparent;
+      color: #7ec699;
+      padding: 0;
+    }
+  }
+  
+  ul, ol {
+    padding-left: 24px;
+    color: #e6e6e6 !important;
+    margin-bottom: 12px;
+    margin-top: 8px;
+    display: block;
+    
+    li {
+      color: #e6e6e6 !important;
+      margin-bottom: 8px;
+      margin-top: 4px;
+      display: list-item;
+      list-style-position: outside;
+    }
+  }
+  
+  ul li {
+    list-style-type: disc;
+  }
+  
+  ol li {
+    list-style-type: decimal;
+  }
+  
+  strong {
+    color: #52c41a !important;
+    font-weight: 600;
+  }
+  
+  em {
+    color: #faad14 !important;
+    font-style: italic;
+  }
+  
+  a {
+    color: #1890ff;
+    
+    &:hover {
+      color: #40a9ff;
+    }
+  }
+  
+  hr {
+    border-color: rgba(255, 255, 255, 0.1);
+    margin: 20px 0;
+    clear: both;
+  }
+  
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    display: table;
+    
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 10px 14px;
+      color: #e6e6e6;
+    }
+    
+    th {
+      background: rgba(255, 255, 255, 0.1);
+      font-weight: 600;
+    }
+    
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+  
+  blockquote {
+    border-left: 4px solid #1890ff;
+    background: rgba(24, 144, 255, 0.1);
+    padding: 12px 16px;
+    margin: 16px 0;
+    color: #e6e6e6;
+    display: block;
+  }
+  
+  // 确保所有块级元素都正确分行
+  div, section, article {
+    display: block;
+  }
+  
+  // 段落之间增加间距
+  p + p {
+    margin-top: 8px;
+  }
+  
+  // 列表前后的间距
+  ul + p, ol + p, p + ul, p + ol {
+    margin-top: 12px;
+  }
+  
+  // 标题前后的间距
+  h1 + *, h2 + *, h3 + *, h4 + * {
+    margin-top: 12px;
+  }
+}
+}

@@ -1,0 +1,87 @@
+{
+    "case_id": "case_01_sensors",
+    "case_name": "98个传感器并发插入导致CPU高负载",
+    "case_description": "模拟物联网场景下，98个传感器同时向数据库并发插入数据，导致CPU使用率飙升至95%以上。这是一个典型的写入密集型场景，常见于物联网、监控数据采集等业务场景。",
+    "category": "01_cpu_high",
+    "difficulty": "easy",
+    "alert_type": "NodeCpuHigh",
+    "severity": "critical",
+    "start_time": "1697297150",
+    "end_time": "1697297328",
+    "start_timestamp": "2023-10-14 23:25:50",
+    "end_timestamp": "2023-10-14 23:28:48",
+    "metrics": {
+        "cpu_usage": 0.95,
+        "cpu_user": 0.72,
+        "cpu_system": 0.18,
+        "cpu_iowait": 0.03,
+        "cpu_idle": 0.05,
+        "load_1m": 8.5,
+        "load_5m": 6.2,
+        "load_15m": 4.1,
+        "memory_usage": 0.65,
+        "disk_io_read": 150,
+        "disk_io_write": 850,
+        "active_connections": 98,
+        "tps": 2500,
+        "slow_query_count": 3
+    },
+    "alerts": [
+        {
+            "alertname": "NodeCpuHigh",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "CPU使用率达到95%，超过阈值80%",
+            "summary": "CRITICAL NodeCpuHigh @172.27.58.65:9100 0.95",
+            "startsAt": "2023-10-14T23:26:49.467858611Z"
+        },
+        {
+            "alertname": "NodeLoadHigh",
+            "severity": "warning",
+            "instance": "172.27.58.65:9100",
+            "description": "系统负载8.5，超过CPU核心数",
+            "summary": "WARN NodeLoadHigh @172.27.58.65:9100 8.5",
+            "startsAt": "2023-10-14T23:27:00.123456789Z"
+        }
+    ],
+    "labels": ["HIGH_CPU", "CONCURRENT_INSERT", "SENSOR_DATA"],
+    "expected_root_causes": [
+        {
+            "cause": "大量并发插入操作",
+            "description": "98个传感器同时执行INSERT操作，导致数据库CPU资源消耗过高",
+            "confidence": 0.95
+        },
+        {
+            "cause": "写入TPS过高",
+            "description": "当前TPS达到2500，超过了数据库单实例的写入瓶颈",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "使用批量插入替代单条插入",
+            "description": "将多个INSERT语句合并为批量INSERT，减少SQL解析和执行开销",
+            "sql_example": "INSERT INTO sensor_data (sensor_id, value, timestamp) VALUES (1, 10.5, '2023-10-14'), (2, 11.2, '2023-10-14'), ...;"
+        },
+        {
+            "solution": "启用连接池复用",
+            "description": "使用PgBouncer等连接池工具，减少连接建立开销",
+            "config_example": "pgbouncer.ini: pool_mode = transaction, max_client_conn = 500"
+        },
+        {
+            "solution": "考虑分区表",
+            "description": "按时间或传感器ID分区，分散写入压力",
+            "sql_example": "CREATE TABLE sensor_data_2023_10 PARTITION OF sensor_data FOR VALUES FROM ('2023-10-01') TO ('2023-11-01');"
+        },
+        {
+            "solution": "优化WAL配置",
+            "description": "调整wal_buffers和checkpoint参数，提升写入性能",
+            "config_example": "wal_buffers = '64MB', checkpoint_completion_target = 0.9"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["sensor_data", "sensors"],
+        "key_metrics": ["cpu_usage", "tps", "active_connections"],
+        "related_tools": ["obtain_metric_values", "get_running_queries", "get_table_stats"]
+    }
+}

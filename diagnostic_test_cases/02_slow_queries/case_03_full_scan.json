@@ -1,0 +1,84 @@
+{
+    "case_id": "case_03_full_scan",
+    "case_name": "全表扫描导致慢查询",
+    "case_description": "模拟大数据量表查询时，由于缺少合适的索引，导致数据库执行全表扫描。查询执行时间从毫秒级上升到分钟级，严重影响业务响应时间。",
+    "category": "02_slow_queries",
+    "difficulty": "medium",
+    "alert_type": "SlowQueryDetected",
+    "severity": "warning",
+    "start_time": "1697310000",
+    "end_time": "1697310300",
+    "start_timestamp": "2023-10-15 03:00:00",
+    "end_timestamp": "2023-10-15 03:05:00",
+    "metrics": {
+        "cpu_usage": 0.45,
+        "memory_usage": 0.55,
+        "disk_io_read": 2500,
+        "disk_io_write": 50,
+        "active_connections": 25,
+        "slow_query_count": 12,
+        "avg_query_time": 45.5,
+        "longest_query_time": 180,
+        "seq_scan_count": 150,
+        "idx_scan_count": 20,
+        "cache_hit_ratio": 0.65
+    },
+    "alerts": [
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到12条执行时间超过10秒的慢查询",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=12",
+            "startsAt": "2023-10-15T03:00:30.123456789Z"
+        },
+        {
+            "alertname": "HighSeqScan",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "顺序扫描次数过高，索引使用率低",
+            "summary": "WARN HighSeqScan @localhost:5432 seq_scan=150, idx_scan=20",
+            "startsAt": "2023-10-15T03:01:00.123456789Z"
+        }
+    ],
+    "labels": ["SLOW_QUERY", "FULL_TABLE_SCAN", "MISSING_INDEX"],
+    "expected_root_causes": [
+        {
+            "cause": "缺少查询条件字段索引",
+            "description": "查询WHERE条件字段未建立索引，导致全表扫描",
+            "confidence": 0.95
+        },
+        {
+            "cause": "索引未被使用",
+            "description": "存在索引但查询条件导致索引失效",
+            "confidence": 0.75
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "为查询条件创建索引",
+            "description": "根据慢查询的WHERE条件创建合适的索引",
+            "sql_example": "CREATE INDEX idx_orders_customer_id ON orders(customer_id);"
+        },
+        {
+            "solution": "使用复合索引优化多条件查询",
+            "description": "为多个查询条件创建复合索引",
+            "sql_example": "CREATE INDEX idx_orders_status_date ON orders(status, order_date);"
+        },
+        {
+            "solution": "更新统计信息",
+            "description": "执行ANALYZE更新表统计信息，帮助优化器选择正确的执行计划",
+            "sql_example": "ANALYZE orders;"
+        },
+        {
+            "solution": "调整random_page_cost参数",
+            "description": "降低索引扫描成本估算，鼓励使用索引",
+            "config_example": "SET random_page_cost = 1.1;"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["orders", "order_items"],
+        "key_metrics": ["slow_query_count", "seq_scan_count", "idx_scan_count", "cache_hit_ratio"],
+        "related_tools": ["obtain_metric_values", "get_slow_queries", "get_table_stats", "get_index_usage"]
+    }
+}

@@ -1,0 +1,81 @@
+{
+    "case_id": "case_18_subquery",
+    "case_name": "子查询性能问题",
+    "case_description": "模拟复杂子查询导致的性能问题。相关子查询被重复执行，导致查询效率极低。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "medium",
+    "alert_type": "SlowQueryDetected",
+    "severity": "warning",
+    "start_time": "1697385000",
+    "end_time": "1697385600",
+    "start_timestamp": "2023-10-15 23:50:00",
+    "end_timestamp": "2023-10-16 00:00:00",
+    "metrics": {
+        "cpu_usage": 0.70,
+        "memory_usage": 0.55,
+        "slow_query_count": 5,
+        "avg_query_time": 120.5,
+        "longest_query_time": 180,
+        "subquery_execution_count": 10000,
+        "outer_query_rows": 10000,
+        "inner_query_avg_time_ms": 18
+    },
+    "alerts": [
+        {
+            "alertname": "SlowQueryDetected",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "检测到5条执行时间超过60秒的慢查询",
+            "summary": "WARN SlowQueryDetected @localhost:5432 count=5, max=180s",
+            "startsAt": "2023-10-15T23:51:00.123456789Z"
+        },
+        {
+            "alertname": "InefficientSubquery",
+            "severity": "warning",
+            "instance": "localhost:5432",
+            "description": "相关子查询被执行10000次，效率极低",
+            "summary": "WARN InefficientSubquery @localhost:5432 executions=10000",
+            "startsAt": "2023-10-15T23:52:00.123456789Z"
+        }
+    ],
+    "labels": ["SLOW_QUERY", "SUBQUERY", "CORRELATED_SUBQUERY", "OPTIMIZATION_NEEDED"],
+    "expected_root_causes": [
+        {
+            "cause": "相关子查询重复执行",
+            "description": "相关子查询对外层每一行都执行一次，共执行10000次",
+            "confidence": 0.98
+        },
+        {
+            "cause": "查询未优化",
+            "description": "子查询可以使用JOIN或EXISTS重写以提高效率",
+            "confidence": 0.95
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "使用JOIN替代子查询",
+            "description": "将子查询改写为JOIN，避免重复执行",
+            "sql_example": "SELECT a.* FROM table_a a JOIN table_b b ON a.id = b.a_id WHERE b.status = 'active';"
+        },
+        {
+            "solution": "使用EXISTS替代IN",
+            "description": "EXISTS通常比IN子查询更高效",
+            "sql_example": "SELECT * FROM orders o WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.quantity > 10);"
+        },
+        {
+            "solution": "使用CTE优化",
+            "description": "将子查询提取为CTE，避免重复计算",
+            "sql_example": "WITH active_users AS (SELECT id FROM users WHERE status = 'active') SELECT * FROM orders WHERE user_id IN (SELECT id FROM active_users);"
+        },
+        {
+            "solution": "添加索引",
+            "description": "为子查询条件字段添加索引",
+            "sql_example": "CREATE INDEX idx_table_b_a_id ON table_b(a_id);"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["orders", "order_items", "customers"],
+        "key_metrics": ["slow_query_count", "subquery_execution_count", "avg_query_time"],
+        "related_tools": ["obtain_metric_values", "get_slow_queries", "get_query_plan"]
+    }
+}

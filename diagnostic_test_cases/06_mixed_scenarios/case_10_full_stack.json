@@ -1,0 +1,113 @@
+{
+    "case_id": "case_10_full_stack",
+    "case_name": "全栈性能问题",
+    "case_description": "模拟系统全面性能危机场景：CPU、内存、IO全部达到高水位，慢查询数量激增，连接数接近上限。这是最复杂的诊断场景，需要综合分析找出根本原因。",
+    "category": "06_mixed_scenarios",
+    "difficulty": "hard",
+    "alert_type": "SystemOverload",
+    "severity": "critical",
+    "start_time": "1697345000",
+    "end_time": "1697345600",
+    "start_timestamp": "2023-10-15 12:43:20",
+    "end_timestamp": "2023-10-15 12:53:20",
+    "metrics": {
+        "cpu_usage": 0.95,
+        "cpu_iowait": 0.25,
+        "memory_usage": 0.92,
+        "swap_usage": 0.30,
+        "load_1m": 25.0,
+        "disk_io_util": 0.90,
+        "disk_io_read_mb": 600,
+        "disk_io_write_mb": 400,
+        "active_connections": 195,
+        "max_connections": 200,
+        "slow_query_count": 45,
+        "temp_files": 200,
+        "waiting_connections": 30,
+        "deadlock_count": 2
+    },
+    "alerts": [
+        {
+            "alertname": "SystemOverload",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "系统全面过载，所有资源指标告警",
+            "summary": "CRITICAL SystemOverload @172.27.58.65:9100",
+            "startsAt": "2023-10-15T12:44:00.123456789Z"
+        },
+        {
+            "alertname": "NodeCpuHigh",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "CPU使用率95%",
+            "summary": "CRITICAL NodeCpuHigh @172.27.58.65:9100 0.95",
+            "startsAt": "2023-10-15T12:44:00.123456789Z"
+        },
+        {
+            "alertname": "NodeMemoryHigh",
+            "severity": "critical",
+            "instance": "172.27.58.65:9100",
+            "description": "内存使用率92%",
+            "summary": "CRITICAL NodeMemoryHigh @172.27.58.65:9100 0.92",
+            "startsAt": "2023-10-15T12:44:30.123456789Z"
+        },
+        {
+            "alertname": "ConnectionPoolExhausted",
+            "severity": "critical",
+            "instance": "localhost:5432",
+            "description": "连接数接近上限 195/200",
+            "summary": "CRITICAL ConnectionPoolExhausted @localhost:5432 195/200",
+            "startsAt": "2023-10-15T12:45:00.123456789Z"
+        }
+    ],
+    "labels": ["SYSTEM_OVERLOAD", "HIGH_CPU", "HIGH_MEMORY", "HIGH_IO", "CONNECTION_EXHAUSTED"],
+    "expected_root_causes": [
+        {
+            "cause": "连接风暴",
+            "description": "短时间内大量连接请求，接近连接数上限",
+            "confidence": 0.95
+        },
+        {
+            "cause": "慢查询堆积",
+            "description": "45条慢查询占用资源，导致后续请求排队",
+            "confidence": 0.90
+        },
+        {
+            "cause": "资源竞争激烈",
+            "description": "CPU、内存、IO全面紧张，互相影响恶化",
+            "confidence": 0.85
+        }
+    ],
+    "expected_solutions": [
+        {
+            "solution": "紧急：终止慢查询",
+            "description": "立即终止执行时间过长的查询，释放资源",
+            "sql_example": "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'active' AND query_start < now() - interval '60 seconds';"
+        },
+        {
+            "solution": "紧急：增加连接数上限",
+            "description": "临时提高最大连接数",
+            "config_example": "ALTER SYSTEM SET max_connections = 300; SELECT pg_reload_conf();"
+        },
+        {
+            "solution": "部署连接池",
+            "description": "使用PgBouncer管理连接，避免连接风暴",
+            "config_example": "pgbouncer.ini: pool_mode = transaction, max_client_conn = 500"
+        },
+        {
+            "solution": "优化慢查询",
+            "description": "分析并优化慢查询，添加索引",
+            "sql_example": "使用EXPLAIN ANALYZE分析，创建必要索引"
+        },
+        {
+            "solution": "考虑读写分离",
+            "description": "将读请求分流到从库",
+            "architecture_suggestion": "部署主从复制，使用从库承担读请求"
+        }
+    ],
+    "diagnosis_hints": {
+        "key_tables": ["all_tables"],
+        "key_metrics": ["cpu_usage", "memory_usage", "disk_io_util", "active_connections", "slow_query_count"],
+        "related_tools": ["obtain_metric_values", "get_running_queries", "get_slow_queries", "get_lock_info"]
+    }
+}

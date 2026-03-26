@@ -1,0 +1,32 @@
+根因十六 MEMORY_RESOURCE_CONTENTION：数据库外进程 MEMORY 资源抢占严重，造
+成数据库进程 MEMORY 资源不足  
+根因十七 LARGE_NETWORK_DROP_RATE： 数据库集群网络异常，主要体现在丢包率异常 
+根因十八 OS_RESOURCE_CONTENTION：服务器句柄资源异常 
+ 
+说明：根因十三到十八根因类似，文档以 IO 资源为例子进行说明，其他类似。 
+ 
+根因十九 WAIT_EVENT：诊断 SQL 执行期间主要时间消耗的 wait event,当前不考虑此根因 
+ 
+根因二十 LACK_STATISTIC_INFO：统计信息长时间未更新，导致基数估计不准确，进而影响
+执行计划. 
+1. 在场景一中，对表 t1 和 t2 执行 analyze 操作，更新统计信息 
+2. 执行 SQL：delete from t1 where id > 100; delete from t2 where id > 100,查询统计信
+息： 
+ 
+ 
+发现此时统计信息未更新，仍然为 delete 之前的状态。 
+3. 执行 SQL: select t1.c1, t2.c1 from t1, t2 where t1.c2=t2.c2; 
+ 
+可以发现执行计划中基数估计偏差较大，导致在数据量较小的情况下选择 hashjoin 
+4. 对表执行 analyze，更新统计信息； 
+5. 再次执行 SQL: select t1.c1, t2.c1 from t1, t2 where t1.c2=t2.c2;执行计划为： 
+ 
+此时执行计划选择了 nestloop,速度提升明显。 
+ 
+根因二十一 MISSING_INDEXES：由于 SQL 缺失索引导致性能问题 
+1. 在 TPCH 场景下执行 SQL： 
+select o_orderpriority, 
+count(*) as order_count                                                                                                                                                                                      
+from                                                                                                                                                                                                         
+orders                                                                                                                                                                                                       
+where 

@@ -1,0 +1,26 @@
+ 
+可以发现其中部分 join 算子运算的元组数非常大，导致执行效率较低。 
+2. 对该 SQL 执行诊断，结果为： 
+ 
+根因 2 说明该 SQL 执行过程中存在数据量较大的 join 操作。 
+ 
+根因二十三 COMPLEX_BOOLEAN_EXPRESSIONS：针对此类语句：select * from t2 where c2 
+not in (‘a’, ‘b’, …, )语句，如果 NOT IN 中元素过多则 SQL 性能较差，一般不建议超过 10 个 
+1. 在场景一中执行 SQL: 
+select * from t2 where c2 not in 
+('bxmqen0n2f1rbjhyc5ack3d49nsp7q36','ug4qxtxvkk1zp8t3ye8wbnzeprq1418n','b45gs4uz
+y8ftt4cxs38jok1spmvk1br7','85clfj5xnmp5jjziv6rvjcx9tb7753nk','pzleufy8nss7v8tct6i3kug4
+apc9p6b5','5t71g5atpw188tvhfmr91kj954vu27nx','nthr0grrfhqmmqpu0kxxzmjywbwrw6g
+9','aql9ofciolayembfoffquic3mufbm3ke','djtk1zpkfjugzlbkoqcwm027h8htiy14','ll1vqxkk16d
+0k12wtetq3zgjuuithdlt','t673fc6mu9657gwqr35c5rcy95lpapv7','chntpsxtr5cfu96x09fugg99
+xqw48pdy','5dtfboa5m36d7voiikhcgdigyf2a61oh','16ztkg5a23erwkadxy7602gvy37x0kiz','3
+r4kgaeqbuzpj2sbq6ce0tiqsh8x3ivy','21y7fvey4i26g9xyt9mhl2n3v1bgdnol','hlp189r1pggciiy
+a80xiurg0qk9t146y','1j4n8fygto8nb6alqd0feky1qta6lcca','mboeq6h8qjm9v3h2qym1vn5k9
+6i0okjc','rihng0fuglurx9ufrg0smro2050tzvus','sqrv4mmyjyv2bt5yb6i32qzeewkw8fh3','dnx0
+gf1rxhe16ytfq6v59cw5hv6fc1oz','8kdr6db46bx6zjfunn2yzqvbarfubuse','bumyeo5ihqf245w
+i7yvqvzu4c9cq542p','zqtzbzn47jixbvmhyg11h4a1dzgu3rol','s68a8mr5d9qqxh3udqp0ciw4o
+f6ls8gq','3nsum4nd9d90nnwahmqm8hfay9bp8bu6','v90p0w78y6gdordbnoq74qjtplc5slos'
+,'njbmrbr32i8vbl52xaj28igqwio9glks','wgraxhjmw8pxliytrfx94ny164nuxewi','1f8dji4nsh8w
+86g11dzea5kyl5g8sqqi','3h066wnneylktd1d25lym05t35kr4iax','qabrzg02vemj4i54yobweq
+qk1zmvhmcr','ri5e090as2m47n61wp6apj3hf91mqv1o','76pk0qehwk81j0hn65xxbni9346zi
+k9h','e05q729apzruffa4877zzuesp725myyf','833tej8ky0jcxqkn9fbpxpoem11ul6qe','t4yvhd
