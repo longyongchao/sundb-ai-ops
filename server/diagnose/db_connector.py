@@ -45,11 +45,11 @@ class DatabaseConfig:
     @param password: 数据库密码
     @param database: 数据库名称
     """
-    host: str = "127.0.0.1"
-    port: int = 5432
-    user: str = "postgres"
-    password: str = "123456"
-    database: str = "dbgpt_metadata"
+    host: str = os.environ.get("PG_HOST", "127.0.0.1")
+    port: int = int(os.environ.get("PG_PORT", "5432"))
+    user: str = os.environ.get("PG_USER", "postgres")
+    password: str = os.environ.get("PG_PASSWORD", "")
+    database: str = os.environ.get("PG_DATABASE", "dbgpt_metadata")
     
     @classmethod
     def from_url(cls, url: str) -> 'DatabaseConfig':

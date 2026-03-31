@@ -925,11 +925,11 @@ def _get_dashboard_stats() -> Dict:
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host="127.0.0.1",
-            port=5432,
-            user="postgres",
-            password="123456",
-            database="dbgpt_metadata"
+            host=os.environ.get("PG_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PG_PORT", "5432")),
+            user=os.environ.get("PG_USER", "postgres"),
+            password=os.environ.get("PG_PASSWORD", ""),
+            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
         )
         cursor = conn.cursor()
         cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = 'dbgpt_metadata'")
@@ -1079,17 +1079,17 @@ def _get_anomaly_from_database() -> List[Dict]:
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host="127.0.0.1",
-            port=5432,
-            user="postgres",
-            password="123456",
-            database="dbgpt_metadata"
+            host=os.environ.get("PG_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PG_PORT", "5432")),
+            user=os.environ.get("PG_USER", "postgres"),
+            password=os.environ.get("PG_PASSWORD", ""),
+            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
         )
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT 
-                CASE 
+            SELECT
+                CASE
                     WHEN file_ext LIKE '%.sql%' THEN 'SQL查询异常'
                     WHEN file_ext LIKE '%.pdf%' THEN '性能问题'
                     WHEN file_ext LIKE '%.json%' THEN '配置异常'
@@ -1199,11 +1199,11 @@ def _get_domain_knowledge_correlation() -> Dict:
         import psycopg2
         
         conn = psycopg2.connect(
-            host="127.0.0.1",
-            port=5432,
-            user="postgres",
-            password="123456",
-            database="dbgpt_metadata"
+            host=os.environ.get("PG_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PG_PORT", "5432")),
+            user=os.environ.get("PG_USER", "postgres"),
+            password=os.environ.get("PG_PASSWORD", ""),
+            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
         )
         cursor = conn.cursor()
         

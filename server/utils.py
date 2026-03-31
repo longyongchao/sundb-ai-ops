@@ -94,7 +94,7 @@ class ListResponse(BaseResponse):
     data: List[Any] = Field(default_factory=list, description="List of items")
 
 
-MY_API_KEY = "sk-9eab6cdc773543a9a3a1230fba7cc98e"
+MY_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 
 def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, streaming: bool = True, callbacks: List[Callable] = [], **kwargs: Any) -> ChatOpenAI:

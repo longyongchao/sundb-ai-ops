@@ -2,6 +2,7 @@ import hashlib
 import secrets
 import time
 import re
+import os
 from datetime import datetime
 from typing import Optional
 from fastapi import Body
@@ -43,14 +44,14 @@ def init_default_user():
         if not user:
             user = UserModel(
                 username="admin",
-                password_hash=hash_password("ls123"),
+                password_hash=hash_password(os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin")),
                 role="admin",
                 is_active=True,
                 created_at=datetime.now()
             )
             session.add(user)
             session.commit()
-            print("[OK] 默认用户 admin 已创建，密码: ls123")
+            print("[OK] 默认用户 admin 已创建（密码通过 DEFAULT_ADMIN_PASSWORD 环境变量设置）")
         return user
     finally:
         session.close()

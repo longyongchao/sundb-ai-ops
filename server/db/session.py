@@ -7,13 +7,18 @@ from sqlalchemy.orm import sessionmaker, Session
 # ========================================================
 # [START] 数据库连接配置（自动检测 PostgreSQL / SQLite）
 # ========================================================
-PG_URL = "postgresql://postgres:123456@127.0.0.1:5432/dbgpt_metadata"
+_PG_HOST = os.environ.get("PG_HOST", "127.0.0.1")
+_PG_PORT = int(os.environ.get("PG_PORT", "5432"))
+_PG_USER = os.environ.get("PG_USER", "postgres")
+_PG_PASSWORD = os.environ.get("PG_PASSWORD", "")
+_PG_DATABASE = os.environ.get("PG_DATABASE", "dbgpt_metadata")
+PG_URL = f"postgresql://{_PG_USER}:{_PG_PASSWORD}@{_PG_HOST}:{_PG_PORT}/{_PG_DATABASE}"
 _USE_PG = False
 
 try:
     import psycopg2
-    conn = psycopg2.connect(host="127.0.0.1", port=5432, user="postgres",
-                            password="123456", dbname="dbgpt_metadata", connect_timeout=2)
+    conn = psycopg2.connect(host=_PG_HOST, port=_PG_PORT, user=_PG_USER,
+                            password=_PG_PASSWORD, dbname=_PG_DATABASE, connect_timeout=2)
     conn.close()
     _USE_PG = True
     print("[OK] [DB-INIT] PostgreSQL 连接成功")
