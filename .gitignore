@@ -169,6 +169,13 @@ others/customllm_test.py
 *.jar
 *.npy
 *.tar.gz
+*.pdf
+
+# 图片目录（README 引用的图片改用外链）
+img/
+
+# 训练数据
+multiagents/localized_llms/training_data/
 
 # PostgreSQL Docker 数据目录
 prometheus_service_docker/dbdata/
