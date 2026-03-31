@@ -361,8 +361,7 @@ def load_local_embeddings(model: str = None, device: str = None):
         device = "cpu"
         print(f"[WARN] GPU检测异常: {e}")
     model_path = get_model_path(model, "embed_model")
-    model_path = get_model_path(model, "embed_model")
-    
+
     if _CACHED_EMBEDDINGS is not None and _CACHED_MODEL_NAME == model:
         print(f"[OK] 使用缓存的嵌入模型: {model}")
         return _CACHED_EMBEDDINGS
