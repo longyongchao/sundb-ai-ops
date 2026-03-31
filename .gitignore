@@ -185,3 +185,67 @@ prometheus_service_docker/dbdata/
 
 # 知识库用户上传内容（运行时数据）
 knowledge_base/*/content/
+
+# ========================
+# 根目录杂项清理：2026-04-01
+# ========================
+
+# 误操作产生的空文件
+/cd
+/conda
+/psql
+
+# 中文重复启动脚本/说明
+/一键启动后端.bat
+/启动说明.txt
+/启动说明_完整版.txt
+/深度
+
+# 一次性审计/分析报告
+/CONNECTIVITY_REPORT.md
+/HARDCODED_DATA_ANALYSIS.md
+/D-BOT_PAPER_COMPLIANCE_ANALYSIS.md
+/D-Bot_Paper_Compliance_Audit.md
+/D-Bot_Core_Path.md
+/REACT_FRONTEND_AUDIT_REPORT.md
+/thesis_materials.md
+
+# 一次性调试/修复脚本
+/check_db.py
+/checkdb.py
+/check_db_data.py
+/check_db_records.py
+/check_db_tables.py
+/check_encoding.py
+/check_result.py
+/check_algorithm_outputs.py
+/fix_bom_v2.py
+/fix_bom_v3.py
+/fix_bom_final.py
+/fix_utf8_bom.py
+/fix_pg.py
+/final_sqlite_fix.py
+/repair.py
+/inspect_db.py
+/paicha.py
+/force_sync.py
+/enable_pg_stat_statements.py
+/inject_data.py
+/inject_sql_files.py
+/fast_ingest_sql.py
+/full_ingest.py
+
+# 散落的测试文件（应在 tests/ 目录中）
+/test_*.py
+/test_*.json
+
+# 运行时数据和杂项脚本
+/demo_diagnose_run_data.jsonl
+/diagnose_user_feedback.txt
+/copy_config_example.py
+/auto_load_pg.py
+/batch_main.py
+/run_stress_test.py
+/streamlit_test.py
+/release.py
+/update_db_to_chinese.py
