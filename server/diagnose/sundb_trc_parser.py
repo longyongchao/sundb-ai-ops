@@ -47,6 +47,26 @@ class SunDBFileHeader:
 # 正则表达式
 # ============================================================
 
+# system.trc 条目头:
+#   [2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION]
+_RE_SYSTEM_ENTRY = re.compile(
+    r'^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)'   # timestamp
+    r'\s+INSTANCE\((\w+)\)'                                  # instance
+    r'\s+THREAD\((\d+),(\d+)\)\]'                            # thread_pid, thread_tid
+    r'\s+\[(\w+)\]',                                         # level
+    re.MULTILINE,
+)
+
+# 错误码: (INSTANCE) ERR-XXXXX(NNNNN): message
+_RE_ERROR_CODE = re.compile(
+    r'\((\w+)\)\s+(ERR-[\w]+\(\d+\))\s*[:\s]\s*(.*)',
+)
+
+# 独立错误码: ERR-28000(16004) : message
+_RE_ERROR_CODE_STANDALONE = re.compile(
+    r'(ERR-[\w]+\(\d+\))\s*[:\s]\s*(.*)',
+)
+
 # 文件头块
 _RE_HEADER_BLOCK = re.compile(
     r'={10,}\s*\n(.*?)={10,}',
@@ -106,8 +126,72 @@ class SunDBSystemTrcParser(_BaseTrcParser):
     """解析 system.trc 文件"""
 
     def parse(self, content: str) -> List[SunDBLogEntry]:
-        # TODO: 实现 system.trc 解析
-        return []
+        entries: List[SunDBLogEntry] = []
+        matches = list(_RE_SYSTEM_ENTRY.finditer(content))
+        if not matches:
+            return entries
+
+        for i, m in enumerate(matches):
+            start = m.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+            raw_block = content[start:end].strip()
+
+            timestamp = m.group(1)
+            instance = m.group(2)
+            thread_pid = int(m.group(3))
+            thread_tid = int(m.group(4))
+            level = m.group(5)
+
+            header_end = m.end()
+            body = content[header_end:end].strip()
+
+            category = self._extract_category(body)
+            error_code, error_message = self._extract_error(body)
+
+            message = "\n".join(
+                line for line in body.splitlines() if line.strip()
+            )
+
+            entries.append(SunDBLogEntry(
+                timestamp=timestamp,
+                instance=instance,
+                thread_pid=thread_pid,
+                thread_tid=thread_tid,
+                level=level,
+                message=message,
+                category=category,
+                error_code=error_code,
+                error_message=error_message,
+                source_file="",
+                raw_text=raw_block,
+            ))
+
+        return entries
+
+    @staticmethod
+    def _extract_category(body: str) -> str:
+        """从消息体提取类别标签"""
+        first_line = body.split("\n")[0].strip() if body else ""
+        cat_m = re.match(r'\[([A-Z][A-Z_ ]*[A-Z])\]', first_line)
+        if cat_m:
+            return cat_m.group(1)
+        cat_m2 = re.search(r'\[([A-Z][A-Z_ ]*[A-Z])\]', first_line)
+        if cat_m2:
+            return cat_m2.group(1)
+        return ""
+
+    @staticmethod
+    def _extract_error(body: str) -> tuple:
+        """从消息体提取错误码和错误消息"""
+        for line in body.splitlines():
+            line = line.strip()
+            m = _RE_ERROR_CODE.match(line)
+            if m:
+                return m.group(2), m.group(3).strip()
+            m2 = _RE_ERROR_CODE_STANDALONE.match(line)
+            if m2:
+                return m2.group(1), m2.group(2).strip()
+        return "", ""
 
 
 class SunDBListenerTrcParser(_BaseTrcParser):
