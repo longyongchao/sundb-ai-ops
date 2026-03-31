@@ -159,3 +159,22 @@ doc2knowledge/docs/overall_diagnosis_knowledge/raw/raw.txt
 tree_of_thought/LLM/my_openai_0613.py
 monitoring_scripts/prometheus/core.py
 others/customllm_test.py
+
+# ========================
+# Git 仓库瘦身：2026-03-31
+# ========================
+
+# 大型二进制/媒体文件
+*.gif
+*.jar
+*.npy
+*.tar.gz
+
+# PostgreSQL Docker 数据目录
+prometheus_service_docker/dbdata/
+
+# 前端构建产物
+**/build_dist/
+
+# 知识库用户上传内容（运行时数据）
+knowledge_base/*/content/
