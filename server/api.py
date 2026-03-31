@@ -156,6 +156,21 @@ def mount_diagnose_routes(app: FastAPI):
         print(f"[ERROR] Failed to mount diagnose routes: {e}")
         traceback.print_exc()
     
+    # SunDB TRC 日志解析接口
+    try:
+        from server.diagnose.sundb_trc_api import (
+            upload_trc, upload_trc_directory,
+            get_trc_fault_events, get_trc_timeline, get_trc_aeu_list,
+        )
+        app.post("/diagnose/upload_trc", tags=["SunDB TRC"])(upload_trc)
+        app.post("/diagnose/upload_trc_directory", tags=["SunDB TRC"])(upload_trc_directory)
+        app.get("/diagnose/trc/fault_events", tags=["SunDB TRC"])(get_trc_fault_events)
+        app.get("/diagnose/trc/timeline", tags=["SunDB TRC"])(get_trc_timeline)
+        app.get("/diagnose/trc/aeu_list", tags=["SunDB TRC"])(get_trc_aeu_list)
+        print("[OK] SunDB TRC routes mounted")
+    except Exception as e:
+        print(f"[WARN] Failed to mount SunDB TRC routes: {e}")
+
     mount_testcase_routes(app)
     mount_anomaly_detector_routes(app)
 

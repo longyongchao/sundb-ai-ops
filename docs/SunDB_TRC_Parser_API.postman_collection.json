@@ -1,0 +1,443 @@
+{
+  "info": {
+    "name": "SunDB TRC Parser API",
+    "description": "SunDB .trc 日志解析器 REST API 测试集合\n\n后端地址: http://localhost:7861\n\n启动命令:\n```\ncd DB-GPT-main\npython3 run_server.py\n```",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:7861",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Upload Single TRC File",
+      "item": [
+        {
+          "name": "POST /diagnose/upload_trc — 上传 system.trc",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "选择一个 system.trc 文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量 (分页起始位置), 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部返回, 默认 0" }
+              ]
+            },
+            "description": "上传单个 .trc 文件并解析。\n\n支持的文件类型:\n- system.trc / system.trc.1 / system.trc.2 ...\n- listener.trc\n- cyrmte_*.trc (CDC)\n- gmon.trc\n\n**分页参数:**\n- offset: 跳过前 N 条 (默认 0)\n- limit: 最多返回 N 条, 0=全部 (默认 0)\n\n**测试步骤:**\n1. 点击 Body → form-data → file 字段的 Select Files\n2. 选择 `测试文件/trc/extracted/g1n1/trc/system.trc`\n3. Send"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"filename\": \"system.trc\",\n    \"parser_type\": \"system\",\n    \"header\": {\n      \"instance_name\": \"G1N1\",\n      \"timestamp\": \"2024-03-12 15:49:05.624850\",\n      \"version\": \"Release 5.0 22.1.3 revision(7f23c84d0b)\"\n    },\n    \"total_entries\": 1523,\n    \"entries_by_level\": {\n      \"INFORMATION\": 1400,\n      \"WARNING\": 120,\n      \"FATAL\": 3\n    },\n    \"fault_count\": 18,\n    \"entries\": [\"...\"]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /diagnose/upload_trc — 上传 listener.trc",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "选择一个 listener.trc 文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量, 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部, 默认 0" }
+              ]
+            },
+            "description": "上传 listener.trc 文件。\n\n**测试文件:** `测试文件/trc/extracted/g1n1/trc/listener.trc`"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /diagnose/upload_trc — 上传 CDC trc",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "选择一个 cyrmte_*.trc 文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量, 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部, 默认 0" }
+              ]
+            },
+            "description": "上传 CDC 变更数据捕获日志。\n\n**测试文件:** `测试文件/trc/extracted/g1n1/trc/cyrmte_SLWDLCVK.trc`"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /diagnose/upload_trc — 无法识别的文件 (400)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "选择一个非 trc 文件 (如 .txt)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量, 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部, 默认 0" }
+              ]
+            },
+            "description": "上传非 trc 文件，预期返回 400。"
+          },
+          "response": [
+            {
+              "name": "400 Bad Request",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"code\": 400,\n  \"msg\": \"无法识别的文件类型: readme.txt\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Upload TRC Directory (tar.gz)",
+      "item": [
+        {
+          "name": "POST /diagnose/upload_trc_directory — 批量解析",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "选择一个 .tar.gz 文件 (包含 trc 目录)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc_directory?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc_directory"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量, 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部, 默认 0" }
+              ]
+            },
+            "description": "上传 .tar.gz 压缩包批量解析。\n\n**分页参数:**\n- offset: 跳过前 N 条 (默认 0)\n- limit: 最多返回 N 条, 0=全部 (默认 0)\n\n**制作测试文件:**\n```bash\ncd 测试文件/trc/extracted/g1n1\ntar -czf /tmp/g1n1_trc.tar.gz trc/\n```\n然后上传 `/tmp/g1n1_trc.tar.gz`\n\n也可以直接使用 `docs/g1n1_trc_sample.tar.gz`\n\n**响应包含:**\n- files_parsed: 解析的文件列表\n- timeline_range: 时间跨度\n- fault_summary: 故障统计\n- entries: 全部日志条目 (按时间排序)\n- aeu_list: AEU 列表"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"filename\": \"g1n1_trc.tar.gz\",\n    \"files_parsed\": [\"cyrmte_SLWDLCVK.trc\", \"gmon.trc\", \"listener.trc\", \"system.trc\", \"system.trc.1\"],\n    \"total_entries\": 5200,\n    \"timeline_range\": {\n      \"earliest\": \"2024-02-05 16:18:28.406162\",\n      \"latest\": \"2024-04-25 11:42:56.829139\"\n    },\n    \"fault_summary\": {\n      \"total\": 32,\n      \"by_type\": {\"FATAL\": 3, \"DEADLOCK\": 5, \"DDL_FAILURE\": 12, \"AUTH_FAILURE\": 8, \"LISTENER_FAILURE\": 4},\n      \"by_severity\": {\"critical\": 3, \"high\": 17, \"medium\": 12}\n    },\n    \"entries\": [{\"timestamp\": \"2024-02-05 16:18:28.406162\", \"instance\": \"\", \"level\": \"\", \"message\": \"...\", \"category\": \"LISTENER\", \"error_code\": \"\", \"error_message\": \"\", \"source_file\": \"listener.trc\"}, \"...\"],\n    \"aeu_list\": [{\"event_id\": \"FATAL-G2N2-20240312180026-a3f1c2\", \"timestamp\": \"2024-03-12 18:00:26.123456\", \"event_type\": \"FATAL\", \"key_fields\": {\"instance\": \"G2N2\", \"error_code\": \"ERR-HY000(11000)\"}, \"raw_log_snippet\": \"undo tablespace semaphore timeout...\"}, \"...\"]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Query Fault Events",
+      "item": [
+        {
+          "name": "GET /diagnose/trc/fault_events — 全部故障",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/fault_events",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "fault_events"]
+            },
+            "description": "获取全部故障事件（需先调用 upload_trc 或 upload_trc_directory）。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/fault_events — 按严重程度过滤",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/fault_events?severity=critical&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "fault_events"],
+              "query": [
+                { "key": "severity", "value": "critical", "description": "可选: critical / high / medium" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "仅返回 critical 级别的故障事件。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/fault_events — 按事件类型过滤",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/fault_events?event_type=DEADLOCK",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "fault_events"],
+              "query": [
+                { "key": "event_type", "value": "DEADLOCK", "description": "可选: FATAL / DEADLOCK / DDL_FAILURE / AUTH_FAILURE / LISTENER_FAILURE" }
+              ]
+            },
+            "description": "仅返回 DEADLOCK 类型的故障事件。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Query Timeline",
+      "item": [
+        {
+          "name": "GET /diagnose/trc/timeline — 全部时间线",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/timeline?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "timeline"],
+              "query": [
+                { "key": "limit", "value": "50" }
+              ]
+            },
+            "description": "获取前 50 条时间线条目。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/timeline — 按节点过滤",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/timeline?instance=G1N1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "timeline"],
+              "query": [
+                { "key": "instance", "value": "G1N1", "description": "可选: G1N1 / G1N2 / G2N1 / G2N2" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "仅返回 G1N1 节点的日志。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/timeline — FATAL 级别",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/timeline?level=FATAL",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "timeline"],
+              "query": [
+                { "key": "level", "value": "FATAL", "description": "可选: INFORMATION / WARNING / FATAL" }
+              ]
+            },
+            "description": "仅返回 FATAL 级别的日志。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/timeline — 时间范围过滤",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/timeline?start_time=2024-03-12 00:00:00&end_time=2024-03-13 00:00:00&limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "timeline"],
+              "query": [
+                { "key": "start_time", "value": "2024-03-12 00:00:00" },
+                { "key": "end_time", "value": "2024-03-13 00:00:00" },
+                { "key": "limit", "value": "100" }
+              ]
+            },
+            "description": "返回 2024-03-12 当天的所有日志。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Query AEU List",
+      "item": [
+        {
+          "name": "GET /diagnose/trc/aeu_list — 全部 AEU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/aeu_list",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "aeu_list"]
+            },
+            "description": "获取全部 AEU (原子依据单元)。\n\n每个 AEU 包含:\n- event_id: 唯一标识\n- event_type: 故障类型\n- key_fields: 结构化字段\n- raw_log_snippet: 原始日志片段"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /diagnose/trc/aeu_list — 按类型过滤",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/aeu_list?event_type=FATAL",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "aeu_list"],
+              "query": [
+                { "key": "event_type", "value": "FATAL" }
+              ]
+            },
+            "description": "仅返回 FATAL 类型的 AEU。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Full Workflow (端到端)",
+      "item": [
+        {
+          "name": "Step 1: 上传 system.trc",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/upload_trc?offset=0&limit=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "upload_trc"],
+              "query": [
+                { "key": "offset", "value": "0", "description": "条目偏移量, 默认 0" },
+                { "key": "limit", "value": "0", "description": "返回条目数上限, 0=全部, 默认 0" }
+              ]
+            },
+            "description": "端到端测试 Step 1: 上传 system.trc"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2: 查看故障事件",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/fault_events",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "fault_events"]
+            },
+            "description": "Step 2: 查看解析出的故障事件"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3: 查看时间线",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/timeline?level=WARNING&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "timeline"],
+              "query": [
+                { "key": "level", "value": "WARNING" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Step 3: 查看 WARNING 级别时间线"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4: 获取 AEU 列表",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/trc/aeu_list",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "trc", "aeu_list"]
+            },
+            "description": "Step 4: 获取 AEU 列表用于 Citation 检索"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
