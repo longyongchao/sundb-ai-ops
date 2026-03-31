@@ -10,6 +10,9 @@
 
 import sys
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 os.environ['NO_PROXY'] = '*'
 for env_key in ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
@@ -150,10 +153,10 @@ def mount_diagnose_routes(app: FastAPI):
         app.get("/api/diagnosis/statistics", tags=["Diagnosis Records"])(get_diagnosis_statistics)
         app.post("/api/diagnosis/export/{record_id}", tags=["Diagnosis Records"])(export_diagnosis_report)
         
-        print("[OK] Success: All Diagnose routes mounted (including Tree Search + Real DB API + Diagnosis Records)")
+        logger.info("All Diagnose routes mounted (including Tree Search + Real DB API + Diagnosis Records)")
     except Exception as e:
         import traceback
-        print(f"[ERROR] Failed to mount diagnose routes: {e}")
+        logger.error(f"Failed to mount diagnose routes: {e}")
         traceback.print_exc()
     
     # SunDB TRC 日志解析接口
@@ -167,9 +170,9 @@ def mount_diagnose_routes(app: FastAPI):
         app.get("/diagnose/trc/fault_events", tags=["SunDB TRC"])(get_trc_fault_events)
         app.get("/diagnose/trc/timeline", tags=["SunDB TRC"])(get_trc_timeline)
         app.get("/diagnose/trc/aeu_list", tags=["SunDB TRC"])(get_trc_aeu_list)
-        print("[OK] SunDB TRC routes mounted")
+        logger.info("SunDB TRC routes mounted")
     except Exception as e:
-        print(f"[WARN] Failed to mount SunDB TRC routes: {e}")
+        logger.warning(f"Failed to mount SunDB TRC routes: {e}")
 
     mount_testcase_routes(app)
     mount_anomaly_detector_routes(app)
@@ -194,10 +197,10 @@ def mount_testcase_routes(app: FastAPI):
         app.get("/api/testcases/{case_id}", tags=["Test Cases"])(get_testcase_detail)
         app.get("/api/testcases/statistics", tags=["Test Cases"])(get_testcase_statistics)
         
-        print("[OK] Success: Test Cases routes mounted")
+        logger.info("Test Cases routes mounted")
     except Exception as e:
         import traceback
-        print(f"[ERROR] Failed to mount testcase routes: {e}")
+        logger.error(f"Failed to mount testcase routes: {e}")
         traceback.print_exc()
 
 
@@ -305,10 +308,10 @@ def mount_anomaly_detector_routes(app: FastAPI):
                 }
             )
         
-        print("[OK] Success: Anomaly Detection and Scheduler routes mounted")
+        logger.info("Anomaly Detection and Scheduler routes mounted")
     except Exception as e:
         import traceback
-        print(f"[ERROR] Failed to mount anomaly detector routes: {e}")
+        logger.error(f"Failed to mount anomaly detector routes: {e}")
         traceback.print_exc()
     
     mount_history_routes(app)
@@ -335,10 +338,10 @@ def mount_history_routes(app: FastAPI):
         app.get("/api/history/trend", tags=["History"])(get_trend_data)
         app.put("/api/history/alerts/{alert_id}/status", tags=["History"])(update_alert_status)
         
-        print("[OK] Success: History routes mounted")
+        logger.info("History routes mounted")
     except Exception as e:
         import traceback
-        print(f"[ERROR] Failed to mount history routes: {e}")
+        logger.error(f"Failed to mount history routes: {e}")
         traceback.print_exc()
     
     mount_notification_routes(app)
@@ -365,10 +368,10 @@ def mount_notification_routes(app: FastAPI):
         app.put("/api/notifications/read-all", tags=["Notifications"])(mark_all_read)
         app.get("/api/notifications/count", tags=["Notifications"])(get_unread_count)
         
-        print("[OK] Success: Notification routes mounted")
+        logger.info("Notification routes mounted")
     except Exception as e:
         import traceback
-        print(f"[ERROR] Failed to mount notification routes: {e}")
+        logger.error(f"Failed to mount notification routes: {e}")
         traceback.print_exc()
 
 
@@ -387,7 +390,7 @@ def mount_alert_routes(app: FastAPI):
         app.delete("/report/histories", tags=["Report"])(clear_all_histories)
         app.get("/api/user/stats", tags=["User"])(get_user_stats)
     except Exception as e:
-        print(f"Warning: Failed to mount alert routes: {e}")
+        logger.warning(f"Failed to mount alert routes: {e}")
 
 
 def mount_auth_routes(app: FastAPI):
@@ -405,9 +408,9 @@ def mount_auth_routes(app: FastAPI):
         app.get("/api/auth/check", tags=["Auth"])(check_auth)
         
         init_default_user()
-        print("[OK] Success: All Auth routes mounted")
+        logger.info("Auth routes mounted")
     except Exception as e:
-        print(f"Warning: Failed to mount auth routes: {e}")
+        logger.warning(f"Failed to mount auth routes: {e}")
 
 
 def mount_anomaly_routes(app: FastAPI):
@@ -431,9 +434,9 @@ def mount_anomaly_routes(app: FastAPI):
         app.post("/api/evaluation/add", tags=["Evaluation"])(add_evaluation_result)
         app.delete("/api/evaluation/clear", tags=["Evaluation"])(clear_evaluation_results)
         
-        print("[OK] Success: All Anomaly routes mounted")
+        logger.info("Anomaly routes mounted")
     except Exception as e:
-        print(f"Warning: Failed to mount anomaly routes: {e}")
+        logger.warning(f"Failed to mount anomaly routes: {e}")
 
 
 def mount_config_routes(app: FastAPI):
@@ -508,9 +511,9 @@ def mount_config_routes(app: FastAPI):
             """保存安全配置"""
             return await save_security_settings(settings)
         
-        print("[OK] Success: All Config routes mounted")
+        logger.info("Config routes mounted")
     except Exception as e:
-        print(f"Warning: Failed to mount config routes: {e}")
+        logger.warning(f"Failed to mount config routes: {e}")
 
 
 def mount_knowledge_routes(app: FastAPI):
@@ -544,9 +547,9 @@ def mount_knowledge_routes(app: FastAPI):
         
         app.post("/chat/knowledge_base_chat", tags=["Chat"])(knowledge_base_chat)
 
-        print("[OK] Success: All Knowledge Base routes mounted.")
+        logger.info("Knowledge Base routes mounted")
     except Exception as e:
-        print(f"[ERROR] Critical Error: Failed to mount knowledge routes: {e}")
+        logger.error(f"Failed to mount knowledge routes: {e}")
 
 
 def run_api(host, port, **kwargs):
@@ -566,5 +569,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app = create_app()
-    print("\n--- API Server Starting Success ---")
+    logger.info("API Server Starting")
     run_api(host=args.host, port=args.port)
