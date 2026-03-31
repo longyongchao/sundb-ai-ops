@@ -139,3 +139,19 @@ def get_db():
 
 def get_db0() -> Session:
     return SessionLocal()
+
+
+def get_pg_connection():
+    """
+    获取 psycopg2 原始 PostgreSQL 连接。
+    使用模块级配置的 PG_HOST/PORT/USER/PASSWORD/DATABASE。
+    调用方需自行关闭连接。
+    """
+    import psycopg2
+    return psycopg2.connect(
+        host=_PG_HOST,
+        port=_PG_PORT,
+        user=_PG_USER,
+        password=_PG_PASSWORD,
+        database=_PG_DATABASE,
+    )

@@ -26,6 +26,8 @@ from rank_bm25 import BM25Okapi
 import re
 import logging
 
+from server.db.session import get_pg_connection
+
 logger = logging.getLogger(__name__)
 
 current_anomaly_context: ContextVar[Optional[Dict]] = ContextVar("anomaly_info", default=None)
@@ -3142,16 +3144,9 @@ class TreeSearchDiagnosis:
                 })
         
         try:
-            import psycopg2
-            conn = psycopg2.connect(
-                host=os.environ.get("PG_HOST", "127.0.0.1"),
-                port=int(os.environ.get("PG_PORT", "5432")),
-                user=os.environ.get("PG_USER", "postgres"),
-                password=os.environ.get("PG_PASSWORD", ""),
-                database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-            )
+            conn = get_pg_connection()
             cursor = conn.cursor()
-            
+
             cursor.execute("SELECT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - pg_stat_activity.query_start) as avg_query_time FROM pg_stat_activity WHERE state = 'active' LIMIT 1;")
             result = cursor.fetchone()
             metrics["avg_query_time"] = result[0] if result else 0
@@ -3219,16 +3214,9 @@ class TreeSearchDiagnosis:
                 })
         
         try:
-            import psycopg2
-            conn = psycopg2.connect(
-                host=os.environ.get("PG_HOST", "127.0.0.1"),
-                port=int(os.environ.get("PG_PORT", "5432")),
-                user=os.environ.get("PG_USER", "postgres"),
-                password=os.environ.get("PG_PASSWORD", ""),
-                database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-            )
+            conn = get_pg_connection()
             cursor = conn.cursor()
-            
+
             top_n = params.get("top_n", 5)
             cursor.execute(f"""
                 SELECT query, calls, total_time, rows, mean_time
@@ -3549,14 +3537,7 @@ class TreeSearchDiagnosis:
                 
                 # 尝试获取数据库相关指标
                 try:
-                    import psycopg2
-                    conn = psycopg2.connect(
-                        host=os.environ.get("PG_HOST", "127.0.0.1"),
-                        port=int(os.environ.get("PG_PORT", "5432")),
-                        user=os.environ.get("PG_USER", "postgres"),
-                        password=os.environ.get("PG_PASSWORD", ""),
-                        database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-                    )
+                    conn = get_pg_connection()
                     cursor = conn.cursor()
                     
                     # 获取连接数

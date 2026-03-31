@@ -34,6 +34,7 @@ from configs import (
     DIAGNOSTIC_RESULTS_PATH)
 import threading
 from server.utils import BaseResponse, save_file, get_beijing_now, get_beijing_now_str
+from server.db.session import get_pg_connection
 from server.diagnose.tree_search_service import run_tree_search_diagnosis
 from server.diagnose.db_connector import get_database_status, get_real_metrics, get_slow_queries, real_db_tool
 from server.diagnose.knowledge_loader import load_knowledge, get_all_root_causes, match_anomaly_to_cause
@@ -923,14 +924,7 @@ def _get_dashboard_stats() -> Dict:
     db_connections = 0
     total_databases = 1
     try:
-        import psycopg2
-        conn = psycopg2.connect(
-            host=os.environ.get("PG_HOST", "127.0.0.1"),
-            port=int(os.environ.get("PG_PORT", "5432")),
-            user=os.environ.get("PG_USER", "postgres"),
-            password=os.environ.get("PG_PASSWORD", ""),
-            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-        )
+        conn = get_pg_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = 'dbgpt_metadata'")
         db_connections = cursor.fetchone()[0]
@@ -1077,14 +1071,7 @@ def _get_real_anomaly_distribution() -> List[Dict]:
 def _get_anomaly_from_database() -> List[Dict]:
     """从数据库系统表获取异常统计"""
     try:
-        import psycopg2
-        conn = psycopg2.connect(
-            host=os.environ.get("PG_HOST", "127.0.0.1"),
-            port=int(os.environ.get("PG_PORT", "5432")),
-            user=os.environ.get("PG_USER", "postgres"),
-            password=os.environ.get("PG_PASSWORD", ""),
-            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-        )
+        conn = get_pg_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -1196,15 +1183,7 @@ def _get_domain_knowledge_correlation() -> Dict:
     参考 D-Bot 论文和数据库性能分析最佳实践
     """
     try:
-        import psycopg2
-        
-        conn = psycopg2.connect(
-            host=os.environ.get("PG_HOST", "127.0.0.1"),
-            port=int(os.environ.get("PG_PORT", "5432")),
-            user=os.environ.get("PG_USER", "postgres"),
-            password=os.environ.get("PG_PASSWORD", ""),
-            database=os.environ.get("PG_DATABASE", "dbgpt_metadata")
-        )
+        conn = get_pg_connection()
         cursor = conn.cursor()
         
         metrics_data = {}
