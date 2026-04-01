@@ -96,7 +96,7 @@ class ListResponse(BaseResponse):
 
 MY_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MY_API_BASE = os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
-MY_MODEL_NAME = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+MY_MODEL_NAME = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").split(",")[0].strip()
 
 
 def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, streaming: bool = True, callbacks: List[Callable] = [], **kwargs: Any) -> ChatOpenAI:

@@ -1989,9 +1989,9 @@ const Diagnosis = () => {
     const fetchModelConfig = async () => {
       try {
         const res = await configAPI.getLLMSettings();
-        const modelName = res?.model_name || 'deepseek-chat';
-        setModelList([{ value: modelName, label: modelName }]);
-        setSelectedModel(modelName);
+        const models = res?.available_models || [res?.model_name || 'deepseek-chat'];
+        setModelList(models.map(m => ({ value: m, label: m })));
+        setSelectedModel(models[0]);
       } catch (e) {
         setModelList([{ value: 'deepseek-chat', label: 'deepseek-chat' }]);
         setSelectedModel('deepseek-chat');

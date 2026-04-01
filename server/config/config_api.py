@@ -9,11 +9,16 @@
 """
 import os
 import json
-from typing import Optional
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, validator
 from server.utils import BaseResponse
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
+
+
+def _parse_models() -> List[str]:
+    raw = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+    return [m.strip() for m in raw.split(",") if m.strip()]
 
 
 class LLMSettings(BaseModel):
@@ -21,14 +26,16 @@ class LLMSettings(BaseModel):
     @class LLMSettings
     @brief 大语言模型配置模型
     @param model_type: 模型类型（deepseek/openai/local）
-    @param model_name: 模型名称
+    @param model_name: 当前使用的模型名称（默认取列表第一个）
+    @param available_models: 可选模型列表（由 DEEPSEEK_MODEL 逗号分隔）
     @param api_key: API 密钥
     @param api_base: API 基础 URL
     @param temperature: 生成温度参数
     @param max_tokens: 最大生成 token 数
     """
     model_type: str = "deepseek"
-    model_name: str = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+    model_name: str = _parse_models()[0]
+    available_models: List[str] = _parse_models()
     api_key: Optional[str] = None
     api_base: str = os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com")
     temperature: float = 0.7
