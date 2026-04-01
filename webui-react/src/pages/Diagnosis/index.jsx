@@ -33,7 +33,7 @@ import DiagnosisProgressGraph from '@/components/Charts/DiagnosisProgressGraph';
 import ThinkingTerminal from '@/components/ThinkingTerminal';
 import EvaluationTable from '@/components/EvaluationTable';
 import SqlHighlight from '@/components/SqlHighlight';
-import { diagnoseAPI, translateAPI, sundbTrcAPI } from '@/utils/api';
+import { diagnoseAPI, translateAPI, sundbTrcAPI, configAPI } from '@/utils/api';
 import { useDiagnosis } from '@/context/DiagnosisContext';
 import { stripMarkdown, stripMarkdownPreserveCode } from '@/utils/markdownUtils';
 import axios from 'axios';
@@ -1226,7 +1226,8 @@ const Diagnosis = () => {
   } = useDiagnosis();
 
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('deepseek-chat');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [modelList, setModelList] = useState([]);
   const [localUploadFile, setLocalUploadFile] = useState(null);
   
   // 防抖相关
@@ -1983,10 +1984,21 @@ const Diagnosis = () => {
     }
   };
 
-  const modelList = [
-    { value: 'deepseek-chat', label: 'DeepSeek-V3' },
-    { value: 'deepseek-reasoner', label: 'DeepSeek-R1' }
-  ];
+  // 从后端获取 LLM 模型配置
+  useEffect(() => {
+    const fetchModelConfig = async () => {
+      try {
+        const res = await configAPI.getLLMSettings();
+        const modelName = res?.model_name || 'deepseek-chat';
+        setModelList([{ value: modelName, label: modelName }]);
+        setSelectedModel(modelName);
+      } catch (e) {
+        setModelList([{ value: 'deepseek-chat', label: 'deepseek-chat' }]);
+        setSelectedModel('deepseek-chat');
+      }
+    };
+    fetchModelConfig();
+  }, []);
 
   // ========== 翻译相关 ==========
   const [translationCache, setTranslationCache] = useState({});

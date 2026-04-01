@@ -28,9 +28,9 @@ class LLMSettings(BaseModel):
     @param max_tokens: 最大生成 token 数
     """
     model_type: str = "deepseek"
-    model_name: str = "deepseek-chat"
+    model_name: str = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
     api_key: Optional[str] = None
-    api_base: str = "https://api.deepseek.com"
+    api_base: str = os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com")
     temperature: float = 0.7
     max_tokens: int = 4096
 

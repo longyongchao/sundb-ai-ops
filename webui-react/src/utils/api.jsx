@@ -593,6 +593,13 @@ export const notificationAPI = {
 };
 
 /**
+ * 系统配置 API
+ */
+export const configAPI = {
+  getLLMSettings: () => api.get('/api/settings/llm'),
+};
+
+/**
  * SunDB TRC 日志解析 API
  * 提供 SunDB 数据库 .trc 日志文件的上传、解析和查询功能
  */
