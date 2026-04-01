@@ -10,7 +10,10 @@ SunDB .trc 日志解析器 — 单元测试
   4. system.trc WARNING 级别
   5. system.trc FATAL 级别
   6. 错误码提取
-  7. 多条目连续解析
+  8. listener.trc 解析
+  9. CDC (cyrmte_*.trc) 解析
+  10. gmon.trc 解析
+  11. 文件级解析
 
 所有测试数据均来自真实 SunDB 集群日志（4 节点: G1N1, G1N2, G2N1, G2N2）。
 """
@@ -120,6 +123,71 @@ SYSTEM_ENTRY_BUILD_INDEX = """\
 [BUILD GSI] GSI build begin - transaction id (-65535), physical id (95983929131008), parallel (8), online (FALSE)
 """
 
+# ------ listener.trc 正常启动 ------
+LISTENER_ENTRY_STARTED = """\
+[2024-02-05 16:18:28.406162 THREAD(1347044,281465167431120)]
+[LISTENER] Configuration file: /home/sundb/product/sundb_data/conf/sundb.listener.conf,
+TCP port: 22581, C/S mode: Dedicated, Connection timeout: 100, Back log: 1024, Tcp filter type: no, Tcp invited file: sundb.invited.conf, Tcp excluded file: sundb.excluded.conf
+"""
+
+# ------ listener.trc 创建失败 ------
+LISTENER_ENTRY_FAILED = """\
+[2024-02-05 16:18:32.832826 THREAD(1347046,281472767116752)]
+[LISTENER] failed to create listener
+"""
+
+# ------ CDC: 连接字符串 ------
+CDC_ENTRY_CONNECTION = """\
+[2024-03-07 11:52:24.095602 THREAD(1645819,281460251578304)]
+connection string [PROTOCOL=DA;DSN=SUNDB;PROTOCOL=TCP;HOST=172.31.220.92;PORT=22581;UID=EIP;PWD=SUNDB]
+"""
+
+# ------ CDC: 登录失败 ------
+CDC_ENTRY_AUTH_FAILURE = """\
+[2024-03-07 11:52:24.112335 THREAD(1645819,281460251578304)]
+ERR-28000(16004) : invalid username/password; logon denied
+"""
+
+# ------ CDC: 启动 LSN (多行) ------
+CDC_ENTRY_START_LSN = """\
+[2024-03-07 11:52:35.944364 THREAD(1645826,281472377573312)]
+START LSN [995448965]
+- CLUSTER GROUP  : G1(1)
+- CLUSTER MEMBER : G1N1(1)
+"""
+
+# ------ CDC: 添加表成功 ------
+CDC_ENTRY_ADD_TABLE = """\
+[2024-03-07 11:52:36.017545 THREAD(1645826,281472377573312)]
+Add EIP.JACLOST Table success[StartLSN = 995448965]
+"""
+
+# ------ CDC: CAPTURE 配置信息 (多行) ------
+CDC_ENTRY_CAPTURE_CONFIG = """\
+[2024-03-07 11:59:06.244469 THREAD(1646786,281459172134848)]
+Configure
+    Protocol                     : TCP
+    Host Ip                      : 127.0.0.1
+    Host Port                    : 22581
+    DSN                          : SUNDB
+    Group Count                  : 1
+    Capture Chunk Count(16M * N) : 6
+    Transaction File Path        : NULL
+    Read Log Block Count         : 40960
+    Transaction Sort Area Size   : 314572800
+"""
+
+# ------ gmon.trc 条目 ------
+GMON_ENTRY_WARMUP = """\
+[2024-02-05 15:18:13.606445 THREAD(1339332,281471121116576)]
+Successfully warmed up.
+"""
+
+GMON_ENTRY_INIT = """\
+[2024-02-05 15:18:13.606486 THREAD(1339332,281471121116576)]
+Successfully initialized - gmon(1339332), gmaster(1339265)
+"""
+
 # ============================================================
 # 组合多条目用于测试连续解析
 # ============================================================
@@ -130,6 +198,20 @@ SYSTEM_TRC_MULTI_ENTRIES = (
     + SYSTEM_ENTRY_WARNING_DDL_FAILURE + "\n"
     + SYSTEM_ENTRY_FATAL + "\n"
     + SYSTEM_ENTRY_DEADLOCK + "\n"
+)
+
+LISTENER_TRC_MULTI_ENTRIES = (
+    SIMPLE_TRC_HEADER + "\n"
+    + LISTENER_ENTRY_STARTED + "\n"
+    + LISTENER_ENTRY_FAILED + "\n"
+)
+
+CDC_TRC_MULTI_ENTRIES = (
+    SIMPLE_TRC_HEADER + "\n"
+    + CDC_ENTRY_CONNECTION + "\n"
+    + CDC_ENTRY_AUTH_FAILURE + "\n"
+    + CDC_ENTRY_START_LSN + "\n"
+    + CDC_ENTRY_ADD_TABLE + "\n"
 )
 
 
@@ -419,6 +501,14 @@ class TestErrorCodeExtraction:
         entries = self.parser.parse(SYSTEM_ENTRY_WARNING_ERR_RD000)
         assert entries[0].error_code == "ERR-RD000(13041)"
 
+    def test_err_28000_16004_in_cdc(self):
+        """ERR-28000(16004) — 登录拒绝（CDC 日志）"""
+        cdc_parser = SunDBCdcTrcParser()
+        entries = cdc_parser.parse(CDC_ENTRY_AUTH_FAILURE)
+        assert len(entries) == 1
+        assert entries[0].error_code == "ERR-28000(16004)"
+        assert "invalid username/password" in entries[0].error_message
+
     def test_no_error_code(self):
         entries = self.parser.parse(SYSTEM_ENTRY_INFORMATION)
         assert entries[0].error_code == ""
@@ -464,6 +554,136 @@ class TestSystemTrcMultiEntries:
 
 
 # ############################################################
+# 测试类 8: listener.trc 解析
+# ############################################################
+
+class TestListenerTrcParser:
+    """测试 listener.trc 日志解析"""
+
+    def setup_method(self):
+        self.parser = SunDBListenerTrcParser()
+
+    def test_parse_listener_started(self):
+        entries = self.parser.parse(LISTENER_ENTRY_STARTED)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.timestamp == "2024-02-05 16:18:28.406162"
+        assert e.instance == ""
+        assert e.thread_pid == 1347044
+        assert e.thread_tid == 281465167431120
+        assert e.level == ""
+        assert e.category == "LISTENER"
+        assert "Configuration file" in e.message
+        assert "TCP port: 22581" in e.message
+
+    def test_parse_listener_failed(self):
+        entries = self.parser.parse(LISTENER_ENTRY_FAILED)
+        assert len(entries) == 1
+        e = entries[0]
+        assert "failed to create listener" in e.message
+        assert e.category == "LISTENER"
+
+    def test_parse_multi_listener_entries(self):
+        entries = self.parser.parse(LISTENER_TRC_MULTI_ENTRIES)
+        assert len(entries) == 2
+
+    def test_listener_multiline_config(self):
+        entries = self.parser.parse(LISTENER_ENTRY_STARTED)
+        e = entries[0]
+        assert "C/S mode: Dedicated" in e.message
+        assert "Back log: 1024" in e.message
+
+
+# ############################################################
+# 测试类 9: CDC (cyrmte_*.trc) 解析
+# ############################################################
+
+class TestCdcTrcParser:
+    """测试 CDC (cyrmte_*.trc) 日志解析"""
+
+    def setup_method(self):
+        self.parser = SunDBCdcTrcParser()
+
+    def test_parse_connection_string(self):
+        entries = self.parser.parse(CDC_ENTRY_CONNECTION)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.timestamp == "2024-03-07 11:52:24.095602"
+        assert e.instance == ""
+        assert e.thread_pid == 1645819
+        assert "PROTOCOL=DA" in e.message
+        assert "HOST=172.31.220.92" in e.message
+
+    def test_parse_auth_failure(self):
+        entries = self.parser.parse(CDC_ENTRY_AUTH_FAILURE)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.error_code == "ERR-28000(16004)"
+        assert "invalid username/password" in e.error_message
+
+    def test_parse_start_lsn_multiline(self):
+        entries = self.parser.parse(CDC_ENTRY_START_LSN)
+        assert len(entries) == 1
+        e = entries[0]
+        assert "START LSN [995448965]" in e.message
+        assert "CLUSTER GROUP" in e.message
+        assert "G1(1)" in e.message
+
+    def test_parse_add_table(self):
+        entries = self.parser.parse(CDC_ENTRY_ADD_TABLE)
+        assert len(entries) == 1
+        e = entries[0]
+        assert "EIP.JACLOST" in e.message
+        assert "StartLSN = 995448965" in e.message
+
+    def test_parse_capture_config_multiline(self):
+        entries = self.parser.parse(CDC_ENTRY_CAPTURE_CONFIG)
+        assert len(entries) == 1
+        e = entries[0]
+        assert "Protocol" in e.message
+        assert "TCP" in e.message
+        assert "Host Port" in e.message
+        assert "22581" in e.message
+        assert "Read Log Block Count" in e.message
+        assert "40960" in e.message
+
+    def test_parse_multi_cdc_entries(self):
+        entries = self.parser.parse(CDC_TRC_MULTI_ENTRIES)
+        assert len(entries) == 4
+
+
+# ############################################################
+# 测试类 10: gmon.trc 解析
+# ############################################################
+
+class TestGmonTrcParser:
+    """测试 gmon.trc 日志解析"""
+
+    def setup_method(self):
+        self.parser = SunDBGmonTrcParser()
+
+    def test_parse_warmup(self):
+        entries = self.parser.parse(GMON_ENTRY_WARMUP)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e.timestamp == "2024-02-05 15:18:13.606445"
+        assert e.thread_pid == 1339332
+        assert "Successfully warmed up" in e.message
+
+    def test_parse_init(self):
+        entries = self.parser.parse(GMON_ENTRY_INIT)
+        assert len(entries) == 1
+        e = entries[0]
+        assert "gmon(1339332)" in e.message
+        assert "gmaster(1339265)" in e.message
+
+    def test_parse_gmon_full(self):
+        full = GMON_TRC_HEADER + "\n" + GMON_ENTRY_WARMUP + "\n" + GMON_ENTRY_INIT
+        entries = self.parser.parse(full)
+        assert len(entries) == 2
+
+
+# ############################################################
 # 测试类 11: 文件级解析 (parse_file)
 # ############################################################
 
@@ -483,6 +703,20 @@ class TestFileLevel:
         assert len(entries) == 4
         for e in entries:
             assert e.source_file == path
+
+    def test_parse_listener_trc_file(self):
+        path = write_trc_file(self.trc_dir, "listener.trc", LISTENER_TRC_MULTI_ENTRIES)
+        parser = SunDBListenerTrcParser()
+        entries = parser.parse_file(path)
+        assert len(entries) == 2
+        for e in entries:
+            assert e.source_file == path
+
+    def test_parse_cdc_trc_file(self):
+        path = write_trc_file(self.trc_dir, "cyrmte_TEST_13.trc", CDC_TRC_MULTI_ENTRIES)
+        parser = SunDBCdcTrcParser()
+        entries = parser.parse_file(path)
+        assert len(entries) == 4
 
     def test_parse_nonexistent_file(self):
         parser = SunDBSystemTrcParser()
