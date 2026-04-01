@@ -229,13 +229,14 @@ class SunDBListenerTrcParser(_BaseTrcParser):
 
             category = "LISTENER" if "LISTENER" in message.upper() else ""
             error_code, error_message = _extract_simple_error(body)
+            level = _infer_level(body, error_code)
 
             entries.append(SunDBLogEntry(
                 timestamp=timestamp,
                 instance="",
                 thread_pid=thread_pid,
                 thread_tid=thread_tid,
-                level="",
+                level=level,
                 message=message,
                 category=category,
                 error_code=error_code,
@@ -273,15 +274,16 @@ class SunDBCdcTrcParser(_BaseTrcParser):
             )
 
             error_code, error_message = _extract_simple_error(body)
+            level = _infer_level(body, error_code)
 
             entries.append(SunDBLogEntry(
                 timestamp=timestamp,
                 instance="",
                 thread_pid=thread_pid,
                 thread_tid=thread_tid,
-                level="",
+                level=level,
                 message=message,
-                category="",
+                category="CDC",
                 error_code=error_code,
                 error_message=error_message,
                 source_file="",
@@ -316,14 +318,16 @@ class SunDBGmonTrcParser(_BaseTrcParser):
                 line for line in body.splitlines() if line.strip()
             )
 
+            level = _infer_level(body)
+
             entries.append(SunDBLogEntry(
                 timestamp=timestamp,
                 instance="",
                 thread_pid=thread_pid,
                 thread_tid=thread_tid,
-                level="",
+                level=level,
                 message=message,
-                category="",
+                category="GMON",
                 error_code="",
                 error_message="",
                 source_file="",
@@ -348,3 +352,30 @@ def _extract_simple_error(body: str) -> tuple:
         if m2:
             return m2.group(2), m2.group(3).strip()
     return "", ""
+
+
+def _infer_level(body: str, error_code: str = "") -> str:
+    """从日志内容推断日志级别
+    
+    规则：
+    1. 有错误码 (ERR-*) -> FATAL
+    2. 包含 FATAL/ERROR/FAIL 关键词 -> FATAL
+    3. 包含 WARNING/WARN 关键词 -> WARNING
+    4. 其他 -> INFORMATION
+    """
+    upper_body = body.upper()
+    
+    if error_code and error_code.startswith("ERR-"):
+        return "FATAL"
+    
+    fatal_keywords = ["FATAL", "ERROR", "FAIL", "EXCEPTION", "CRITICAL", "ABORT"]
+    for kw in fatal_keywords:
+        if kw in upper_body:
+            return "FATAL"
+    
+    warning_keywords = ["WARNING", "WARN"]
+    for kw in warning_keywords:
+        if kw in upper_body:
+            return "WARNING"
+    
+    return "INFORMATION"

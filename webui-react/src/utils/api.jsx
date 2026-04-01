@@ -592,4 +592,84 @@ export const notificationAPI = {
   markAllRead: () => api.put('/api/notifications/read-all')
 };
 
+/**
+ * SunDB TRC 日志解析 API
+ * 提供 SunDB 数据库 .trc 日志文件的上传、解析和查询功能
+ */
+export const sundbTrcAPI = {
+  /**
+   * 上传单个 .trc 文件并解析
+   * @param {File} file - .trc 文件对象
+   * @param {Object} options - 可选参数 { offset, limit }
+   * @returns {Promise} 解析结果，包含 header, entries, fault_count 等
+   */
+  uploadTrc: async (file, options = {}) => {
+    const { offset = 0, limit = 0 } = options;
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return api.post('/diagnose/upload_trc', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+      params: { offset, limit }
+    });
+  },
+
+  /**
+   * 上传 .tar.gz 压缩包批量解析
+   * @param {File} file - .tar.gz 压缩包（包含 trc 目录）
+   * @param {Object} options - 可选参数 { offset, limit }
+   * @returns {Promise} 批量解析结果，包含 timeline_range, fault_summary, aeu_list 等
+   */
+  uploadTrcDirectory: async (file, options = {}) => {
+    const { offset = 0, limit = 0 } = options;
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return api.post('/diagnose/upload_trc_directory', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+      params: { offset, limit }
+    });
+  },
+
+  /**
+   * 获取故障事件列表
+   * @param {Object} params - 筛选参数 { severity, event_type, limit }
+   * @returns {Promise} 故障事件列表
+   */
+  getFaultEvents: async (params = {}) => {
+    return api.get('/diagnose/trc/fault_events', { params });
+  },
+
+  /**
+   * 获取跨文件统一时间线
+   * @param {Object} params - 筛选参数 { start_time, end_time, level, instance, limit }
+   * @returns {Promise} 时间线条目列表
+   */
+  getTimeline: async (params = {}) => {
+    return api.get('/diagnose/trc/timeline', { params });
+  },
+
+  /**
+   * 获取 AEU (原子依据单元) 列表
+   * @param {Object} params - 筛选参数 { event_type }
+   * @returns {Promise} AEU 列表，用于 Citation 检索
+   */
+  getAEUList: async (params = {}) => {
+    return api.get('/diagnose/trc/aeu_list', { params });
+  },
+
+  /**
+   * TRC 智能诊断
+   * @param {Object} trcData - TRC 解析结果，包含 filename, parser_type, fault_count, entries, entries_by_level
+   * @returns {Promise} 诊断结果，包含 root_causes, solutions, reasoning_tree 等
+   */
+  trcDiagnose: async (trcData) => {
+    return api.post('/diagnose/trc_diagnose', trcData, {
+      timeout: 180000
+    });
+  }
+};
+
 export default api;

@@ -33,10 +33,13 @@ import DiagnosisProgressGraph from '@/components/Charts/DiagnosisProgressGraph';
 import ThinkingTerminal from '@/components/ThinkingTerminal';
 import EvaluationTable from '@/components/EvaluationTable';
 import SqlHighlight from '@/components/SqlHighlight';
-import { diagnoseAPI, translateAPI } from '@/utils/api';
+import { diagnoseAPI, translateAPI, sundbTrcAPI } from '@/utils/api';
 import { useDiagnosis } from '@/context/DiagnosisContext';
 import { stripMarkdown, stripMarkdownPreserveCode } from '@/utils/markdownUtils';
 import axios from 'axios';
+import TrcFaultPanel from '@/components/TrcFaultPanel';
+import TrcTimelinePanel from '@/components/TrcTimelinePanel';
+import TrcFaultSummaryChart from '@/components/Charts/TrcFaultSummaryChart';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -97,6 +100,27 @@ const buildAnomalyInfo = (fileContent) => {
   }
 
   const content = fileContent.toLowerCase();
+
+  const isSunDBTrc = (
+    content.includes('instance(') ||
+    content.includes('thread(') ||
+    content.includes('[information]') ||
+    content.includes('[warning]') ||
+    content.includes('[fatal]') ||
+    content.includes('[deadlock]') ||
+    content.includes('err-hy000') ||
+    content.includes('err-42000') ||
+    content.includes('err-28000')
+  );
+  if (isSunDBTrc) {
+    return {
+      alert_type: "SunDB TRC Log",
+      description: "检测到 SunDB 数据库 trace 日志，将进行结构化解析和故障提取",
+      severity: "medium",
+      timestamp: new Date().toISOString(),
+      source: "sundb_trc"
+    };
+  }
 
   const isSlowQueryLog = (
     content.includes('slow query') ||
@@ -1183,12 +1207,22 @@ const Diagnosis = () => {
     currentStepIndex: globalStepIndex,
     uploadFile: globalUploadFile,
     diagnosisId: globalDiagnosisId,
+    uploadMode: globalUploadMode,
+    trcParseResult: globalTrcParseResult,
+    trcFaultEvents: globalTrcFaultEvents,
+    trcTimeline: globalTrcTimeline,
+    trcAEUList: globalTrcAEUList,
     startDiagnosis,
     updateProgress,
     updateTerminal,
     completeDiagnosis,
     failDiagnosis,
-    resetDiagnosis
+    resetDiagnosis,
+    setUploadMode,
+    setTrcParseResult,
+    setTrcFaultEvents,
+    setTrcTimeline,
+    setTrcAEUList
   } = useDiagnosis();
 
   const [loading, setLoading] = useState(false);
@@ -1226,6 +1260,7 @@ const Diagnosis = () => {
   const terminalOutput = globalTerminal;
   const realTimeSteps = globalSteps;
   const currentStepIndex = globalStepIndex;
+  const uploadMode = globalUploadMode;
 
   // 同步终端输出引用
   useEffect(() => {
@@ -1481,10 +1516,125 @@ const Diagnosis = () => {
 
   // ========== 上传文件处理 ==========
   const handleUpload = (file) => {
+    console.log('[UPLOAD] 文件选择:', file.name);
     setLocalUploadFile(file);
+    
+    const fileName = file.name.toLowerCase();
+    
+    // 检查是否是 macOS 系统文件 (._开头)
+    if (fileName.startsWith('._')) {
+      message.warning(`检测到系统文件: ${file.name}，已忽略`);
+      return false;
+    }
+    
+    // 先设置 uploadMode，再重置其他状态
+    if (fileName.endsWith('.trc')) {
+      console.log('[UPLOAD] 检测到 TRC 文件，设置 uploadMode 为 trc_single');
+      message.info(`检测到 SunDB 日志文件: ${file.name}，将进行 TRC 解析`);
+      setUploadMode('trc_single');
+    } else if (fileName.endsWith('.tar.gz') || fileName.endsWith('.tgz')) {
+      console.log('[UPLOAD] 检测到 TAR.GZ 文件，设置 uploadMode 为 trc_batch');
+      message.info(`检测到 TRC 压缩包: ${file.name}，将进行批量解析`);
+      setUploadMode('trc_batch');
+    } else {
+      console.log('[UPLOAD] 检测到 JSON 文件，设置 uploadMode 为 json');
+      setUploadMode('json');
+    }
+
+    // 重置诊断状态（但保留 uploadMode）
     resetDiagnosis();
+
     message.success(`已选择文件: ${file.name}`);
     return false;
+  };
+
+  // ========== TRC 文件上传处理 ==========
+  const handleTrcUpload = async (file, mode) => {
+    setLoading(true);
+    message.loading({ content: '正在解析 TRC 文件...', key: 'trc_parse' });
+
+    try {
+      let result;
+      
+      if (mode === 'trc_single') {
+        result = await sundbTrcAPI.uploadTrc(file);
+      } else if (mode === 'trc_batch') {
+        result = await sundbTrcAPI.uploadTrcDirectory(file);
+      } else {
+        throw new Error(`无法识别的文件类型: ${file.name}`);
+      }
+
+      console.log('[TRC] 解析结果:', result);
+
+      const trcData = result;
+      
+      console.log('[TRC] trcData:', trcData);
+      console.log('[TRC] fault_summary:', trcData?.fault_summary);
+      console.log('[TRC] aeu_list:', trcData?.aeu_list);
+      console.log('[TRC] entries:', trcData?.entries);
+      
+      if (trcData) {
+        const { fault_summary, aeu_list, entries, timeline_range, files_parsed } = trcData;
+        
+        console.log('[TRC] 调用 setTrcParseResult...');
+        setTrcParseResult(trcData, aeu_list || [], entries || [], aeu_list || []);
+        
+        console.log('[TRC] setTrcParseResult 调用完成');
+        
+        if (aeu_list) {
+          setTrcAEUList(aeu_list);
+        }
+        
+        if (entries) {
+          setTrcTimeline(entries);
+        }
+        
+        const faultCount = trcData.fault_count || fault_summary?.total || 0;
+        if (faultCount > 0) {
+          message.success(`TRC 解析完成，发现 ${faultCount} 个故障事件`);
+        } else {
+          message.success('TRC 解析完成，未发现故障事件');
+        }
+
+        window.dispatchEvent(new CustomEvent('trc-parse-completed', {
+          detail: {
+            fault_count: faultCount,
+            timeline_range,
+            files_parsed
+          }
+        }));
+
+        if (faultCount > 0 || (trcData.entries_by_level && Object.keys(trcData.entries_by_level).length > 0)) {
+          message.loading({ content: '正在进行智能诊断...', key: 'trc_diagnose' });
+          
+          try {
+            const diagnosisResult = await sundbTrcAPI.trcDiagnose({
+              filename: trcData.filename,
+              parser_type: trcData.parser_type,
+              fault_count: faultCount,
+              entries: trcData.entries || [],
+              entries_by_level: trcData.entries_by_level || {}
+            });
+            
+            console.log('[TRC] 诊断结果:', diagnosisResult);
+            
+            if (diagnosisResult) {
+              completeDiagnosis(diagnosisResult);
+              message.success({ content: '智能诊断完成', key: 'trc_diagnose' });
+            }
+          } catch (diagError) {
+            console.error('[TRC] 智能诊断失败:', diagError);
+            message.warning({ content: `智能诊断失败: ${diagError.message || '未知错误'}`, key: 'trc_diagnose' });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[TRC] 解析失败:', error);
+      message.error(`TRC 解析失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoading(false);
+      message.destroy('trc_parse');
+    }
   };
 
   // ========== 开始诊断（核心流程） ==========
@@ -1510,6 +1660,13 @@ const Diagnosis = () => {
     // 3. 检查是否有上传文件
     if (!localUploadFile) {
       message.warning('请先上传文件后再开始诊断');
+      return;
+    }
+    
+    // 3.5 检查是否是 TRC 文件，走 TRC 解析流程
+    if (uploadMode === 'trc_single' || uploadMode === 'trc_batch') {
+      console.log('[DIAGNOSIS] 检测到 TRC 文件，启动 TRC 解析流程');
+      await handleTrcUpload(localUploadFile, uploadMode);
       return;
     }
     
@@ -1921,15 +2078,20 @@ const Diagnosis = () => {
               <label style={{ display: 'block', marginBottom: '8px' }}>上传文件</label>
               <Upload
                 beforeUpload={handleUpload}
-                accept=".json,.yaml,.yml"
+                accept=".json,.yaml,.yml,.trc,.tar.gz,.tgz"
                 maxCount={1}
               >
                 <Button icon={<UploadOutlined />}>选择文件</Button>
               </Upload>
               {localUploadFile && (
-                <Tag color="blue" style={{ marginTop: '8px' }}>
-                  <FileTextOutlined /> {localUploadFile.name}
-                </Tag>
+                <div style={{ marginTop: '8px' }}>
+                  <Tag color="blue" style={{ marginRight: '4px' }}>
+                    <FileTextOutlined /> {localUploadFile.name}
+                  </Tag>
+                  {(uploadMode === 'trc_single' || uploadMode === 'trc_batch') && (
+                    <Tag color="orange">SunDB TRC 模式</Tag>
+                  )}
+                </div>
               )}
             </div>
 
@@ -2030,6 +2192,48 @@ const Diagnosis = () => {
           ) */}
 
           <Spin spinning={diagnosing} tip="正在进行 Tree Search 诊断...">
+            {/* TRC 解析结果展示 */}
+            {(() => {
+              console.log('[TRC RENDER] globalTrcParseResult:', globalTrcParseResult);
+              console.log('[TRC RENDER] uploadMode:', uploadMode);
+              console.log('[TRC RENDER] 显示条件:', globalTrcParseResult && (uploadMode === 'trc_single' || uploadMode === 'trc_batch'));
+              return null;
+            })()}
+            
+            {/* TRC 解析结果 - 图表、故障面板、时间线 */}
+            {globalTrcParseResult && (uploadMode === 'trc_single' || uploadMode === 'trc_batch') && (
+              <>
+                {/* TRC 故障统计图表 */}
+                <TrcFaultSummaryChart 
+                  faultSummary={{
+                    total: globalTrcParseResult.fault_count || 0,
+                    by_type: globalTrcParseResult.entries_by_level || {},
+                    by_severity: globalTrcParseResult.entries_by_level || {},
+                    by_instance: {}
+                  }}
+                  style={{ marginBottom: '16px' }}
+                />
+                
+                {/* TRC 故障事件面板 */}
+                <TrcFaultPanel 
+                  faults={globalTrcParseResult.entries || []}
+                  loading={loading}
+                  style={{ marginBottom: '16px' }}
+                />
+                
+                {/* TRC 时间线面板 */}
+                {globalTrcParseResult.entries && globalTrcParseResult.entries.length > 0 && (
+                  <TrcTimelinePanel 
+                    entries={globalTrcParseResult.entries}
+                    loading={loading}
+                    maxHeight="500px"
+                    style={{ marginBottom: '16px' }}
+                  />
+                )}
+              </>
+            )}
+            
+            {/* 智能诊断结果 */}
             {diagnosisResult ? (
               <>
                 {/* 根因分析结果 */}
@@ -2359,7 +2563,7 @@ const Diagnosis = () => {
                   </Col>
                 </Row>
               </>
-            ) : (
+            ) : !globalTrcParseResult ? (
               <>
                 {/* 诊断未开始时的空状态提示 */}
                 <Card bordered={false} style={{ backgroundColor: '#1e1e1e', border: '1px solid #333', marginBottom: '16px' }}>
@@ -2390,7 +2594,7 @@ const Diagnosis = () => {
                   </div>
                 </Card>
               </>
-            )}
+            ) : null}
           </Spin>
         </Col>
       </Row>

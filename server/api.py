@@ -43,7 +43,10 @@ import uvicorn
 import argparse
 from configs.server_config import OPEN_CROSS_DOMAIN
 from configs.model_config import NLTK_DATA_PATH
-from configs import VERSION
+try:
+    from configs import VERSION
+except ImportError:
+    VERSION = "1.0.0"
 import nltk
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -164,9 +167,11 @@ def mount_diagnose_routes(app: FastAPI):
         from server.diagnose.sundb_trc_api import (
             upload_trc, upload_trc_directory,
             get_trc_fault_events, get_trc_timeline, get_trc_aeu_list,
+            trc_diagnose,
         )
         app.post("/diagnose/upload_trc", tags=["SunDB TRC"])(upload_trc)
         app.post("/diagnose/upload_trc_directory", tags=["SunDB TRC"])(upload_trc_directory)
+        app.post("/diagnose/trc_diagnose", tags=["SunDB TRC"])(trc_diagnose)
         app.get("/diagnose/trc/fault_events", tags=["SunDB TRC"])(get_trc_fault_events)
         app.get("/diagnose/trc/timeline", tags=["SunDB TRC"])(get_trc_timeline)
         app.get("/diagnose/trc/aeu_list", tags=["SunDB TRC"])(get_trc_aeu_list)

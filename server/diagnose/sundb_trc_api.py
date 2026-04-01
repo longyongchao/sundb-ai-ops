@@ -3,9 +3,10 @@
 """
 SunDB .trc 日志解析 — REST API
 
-提供 5 个接口:
+提供 6 个接口:
   POST /diagnose/upload_trc           上传单个 trc 文件
   POST /diagnose/upload_trc_directory 上传 tar.gz 压缩包批量解析
+  POST /diagnose/trc_diagnose         TRC 智能诊断
   GET  /diagnose/trc/fault_events     获取故障事件列表
   GET  /diagnose/trc/timeline         获取跨文件时间线
   GET  /diagnose/trc/aeu_list         获取 AEU 列表
@@ -16,11 +17,12 @@ import tarfile
 import tempfile
 import shutil
 import logging
+import time
 from collections import Counter
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
-from fastapi import File, Query, UploadFile
+from fastapi import Body, File, Query, UploadFile
 
 from server.utils import BaseResponse
 from server.diagnose.sundb_trc_parser import (
@@ -303,3 +305,121 @@ async def get_trc_aeu_list(
         "total": len(aeu_list),
         "aeu_list": [_aeu_to_dict(a) for a in aeu_list],
     })
+
+
+# ------------------------------------------------------------------
+# POST /diagnose/trc_diagnose
+# ------------------------------------------------------------------
+
+async def trc_diagnose(
+    trc_data: Dict[str, Any] = Body(
+        ...,
+        description="TRC 解析结果",
+        examples=[{
+            "filename": "listener.trc",
+            "parser_type": "listener",
+            "fault_count": 6,
+            "entries": [],
+            "entries_by_level": {"FATAL": 3, "WARNING": 2, "INFORMATION": 30}
+        }]
+    )
+) -> BaseResponse:
+    """
+    TRC 智能诊断接口
+    
+    将 TRC 解析结果转换为异常信息，调用 Tree Search 诊断引擎进行根因分析
+    
+    @param trc_data: TRC 解析结果，包含 filename, parser_type, fault_count, entries, entries_by_level
+    @return: 诊断结果，包含 root_causes, solutions, reasoning_tree 等
+    """
+    from server.diagnose.tree_search_service import TreeSearchDiagnosis
+    
+    try:
+        filename = trc_data.get("filename", "unknown.trc")
+        parser_type = trc_data.get("parser_type", "unknown")
+        fault_count = trc_data.get("fault_count", 0)
+        entries = trc_data.get("entries", [])
+        entries_by_level = trc_data.get("entries_by_level", {})
+        
+        logger.info(f"[TRC_DIAGNOSE] 开始 TRC 智能诊断: {filename}")
+        logger.info(f"[TRC_DIAGNOSE] 解析器类型: {parser_type}, 故障数: {fault_count}")
+        
+        if fault_count == 0 and not entries:
+            return BaseResponse(
+                code=200, 
+                msg="TRC 文件未发现故障，无需诊断",
+                data={
+                    "status": "no_faults",
+                    "filename": filename,
+                    "parser_type": parser_type,
+                    "root_causes": [],
+                    "solutions": []
+                }
+            )
+        
+        fatal_count = entries_by_level.get("FATAL", 0)
+        warning_count = entries_by_level.get("WARNING", 0)
+        
+        error_messages = []
+        for entry in entries[:20]:
+            if entry.get("level") == "FATAL" or entry.get("error_code"):
+                msg = entry.get("message", "")[:200]
+                error_code = entry.get("error_code", "")
+                if error_code:
+                    error_messages.append(f"[{error_code}] {msg}")
+                elif entry.get("level") == "FATAL":
+                    error_messages.append(msg)
+        
+        error_summary = "\n".join(error_messages[:5]) if error_messages else "未发现明确错误信息"
+        
+        severity = "critical" if fatal_count > 0 else ("high" if warning_count > 0 else "medium")
+        
+        parser_type_names = {
+            "system": "系统日志",
+            "listener": "监听器日志",
+            "cdc": "CDC变更捕获日志",
+            "gmon": "集群监控日志"
+        }
+        parser_type_display = parser_type_names.get(parser_type, parser_type)
+        
+        anomaly_info = {
+            "alert_type": f"SunDB {parser_type_display}异常",
+            "description": f"""SunDB {parser_type_display}分析结果:
+- 文件名: {filename}
+- 总条目数: {len(entries)}
+- 致命错误(FATAL): {fatal_count} 条
+- 警告(WARNING): {warning_count} 条
+- 其他: {entries_by_level.get('INFORMATION', 0)} 条
+
+关键错误信息:
+{error_summary}""",
+            "severity": severity,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "trc_parse",
+            "trc_metadata": {
+                "filename": filename,
+                "parser_type": parser_type,
+                "fault_count": fault_count,
+                "entries_by_level": entries_by_level
+            }
+        }
+        
+        logger.info(f"[TRC_DIAGNOSE] 构建异常信息: alert_type={anomaly_info['alert_type']}, severity={severity}")
+        
+        ts_diagnosis = TreeSearchDiagnosis()
+        result = await ts_diagnosis.diagnose(anomaly_info)
+        
+        result["trc_metadata"] = {
+            "filename": filename,
+            "parser_type": parser_type,
+            "fault_count": fault_count,
+            "entries_by_level": entries_by_level
+        }
+        
+        logger.info(f"[TRC_DIAGNOSE] 诊断完成，根因数: {len(result.get('root_causes', []))}")
+        
+        return BaseResponse(code=200, msg="Success", data=result)
+        
+    except Exception as e:
+        logger.exception("[TRC_DIAGNOSE] 诊断失败")
+        return BaseResponse(code=500, msg=f"TRC 智能诊断失败: {str(e)}")
