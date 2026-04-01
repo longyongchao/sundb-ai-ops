@@ -15,6 +15,7 @@ import {
 import axios from 'axios';
 import { marked } from 'marked';
 import { MetricLineChart, AnomalyPieChart, DiagnosisHeatMap, MetricBarChart } from '@/components/Charts';
+import { configAPI } from '@/utils/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -43,7 +44,7 @@ const KnowledgeChat = () => {
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
-  const [selectedModel, setSelectedModel] = useState('deepseek-chat');
+  const [selectedModel, setSelectedModel] = useState('');
   const [chartData, setChartData] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
@@ -54,11 +55,28 @@ const KnowledgeChat = () => {
   const [loadingReports, setLoadingReports] = useState(false);
   const messagesEndRef = useRef(null);
   
-  const modelOptions = [
-    { value: 'deepseek-chat', label: 'DeepSeek Chat (大模型+知识库)' },
-    { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner (大模型+知识库)' },
+  const [modelOptions, setModelOptions] = useState([
     { value: 'local-kb', label: '本地知识库模式 (离线)' },
-  ];
+  ]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await configAPI.getLLMSettings();
+        const models = res?.available_models || [res?.model_name || 'deepseek-chat'];
+        const llmOptions = models.map(m => ({ value: m, label: `${m} (大模型+知识库)` }));
+        setModelOptions([...llmOptions, { value: 'local-kb', label: '本地知识库模式 (离线)' }]);
+        setSelectedModel(prev => prev || models[0]);
+      } catch (e) {
+        setModelOptions([
+          { value: 'deepseek-chat', label: 'deepseek-chat (大模型+知识库)' },
+          { value: 'local-kb', label: '本地知识库模式 (离线)' },
+        ]);
+        setSelectedModel(prev => prev || 'deepseek-chat');
+      }
+    };
+    fetchModels();
+  }, []);
 
   const loadConversations = () => {
     try {
