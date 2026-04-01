@@ -95,6 +95,8 @@ class ListResponse(BaseResponse):
 
 
 MY_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+MY_API_BASE = os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
+MY_MODEL_NAME = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
 
 def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, streaming: bool = True, callbacks: List[Callable] = [], **kwargs: Any) -> ChatOpenAI:
@@ -116,8 +118,8 @@ def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, 
         streaming=streaming,
         callbacks=callbacks,
         openai_api_key=MY_API_KEY,
-        openai_api_base="https://api.deepseek.com/v1",
-        model_name="deepseek-chat",
+        openai_api_base=MY_API_BASE,
+        model_name=MY_MODEL_NAME,
         temperature=temperature,
         max_tokens=max_tokens,
         **kwargs
@@ -134,8 +136,8 @@ def get_OpenAI(model_name: str, temperature: float, **kwargs: Any) -> OpenAI:
     kwargs.pop("proxies", None)
     return OpenAI(
         openai_api_key=MY_API_KEY,
-        openai_api_base="https://api.deepseek.com/v1",
-        model_name="deepseek-chat",
+        openai_api_base=MY_API_BASE,
+        model_name=MY_MODEL_NAME,
         temperature=temperature,
         **kwargs
     )
