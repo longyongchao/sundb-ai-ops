@@ -432,7 +432,8 @@ const KnowledgeChat = () => {
         
         setMessages(prev => [...prev, { role: 'assistant', content: knowledgeContent }]);
       } else {
-        response = await axios.post('/chat/knowledge_base_chat', {
+        // 请求大模型+知识库（通过 fetch 读取 SSE 响应）
+        const requestBody = {
           query: inputValue,
           knowledge_base_name: '__all__',
           model_name: selectedModel,
@@ -440,34 +441,103 @@ const KnowledgeChat = () => {
             role: m.role,
             content: m.content
           })),
-          stream: false,
+          stream: true,
           top_k: 5,
           score_threshold: 0.5,
           prompt_name: "default"
-        }, {
-          headers: { 'Content-Type': 'application/json' }
+        };
+
+        // 先插入一个空的 assistant 消息用于流式填充
+        setMessages(prev => [...prev, { role: 'assistant', content: '', charts: [] }]);
+
+        const res = await fetch('/chat/knowledge_base_chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
         });
-        
-        console.log('Knowledge Base Chat API Response:', response.data);
-        
-        let aiResponse = '抱歉，我无法处理您的请求。';
-        try {
-          const responseData = typeof response.data === 'string' 
-            ? JSON.parse(response.data) 
-            : response.data;
-          aiResponse = responseData.answer || responseData.response || responseData.message || responseData.content || aiResponse;
-        } catch (e) {
-          aiResponse = response.data?.answer || response.data || aiResponse;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullAnswer = '';
+        let sourceDocs = [];
+        let buffer = '';
+
+        const parseChunks = (text) => {
+          // 后端返回的多个 JSON 紧挨在一起：{"answer":"你好"}{"answer":"！"}
+          // 用正则按 }{ 边界拆分
+          const results = [];
+          const parts = text.split(/(?<=\})\s*(?=\{)/);
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed) continue;
+            try {
+              results.push(JSON.parse(trimmed));
+            } catch (e) {
+              // 不完整的 JSON，返回未解析的部分作为剩余 buffer
+              return { results, remaining: trimmed };
+            }
+          }
+          return { results, remaining: '' };
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const { results: chunks, remaining } = parseChunks(buffer);
+          buffer = remaining;
+
+          for (const chunk of chunks) {
+            if (chunk.answer !== undefined) {
+              fullAnswer += chunk.answer;
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: fullAnswer,
+                };
+                return updated;
+              });
+            }
+            if (chunk.docs) {
+              sourceDocs = chunk.docs;
+            }
+          }
         }
-        
+
+        // 处理 buffer 中剩余的数据
+        if (buffer.trim()) {
+          try {
+            const chunk = JSON.parse(buffer.trim());
+            if (chunk.answer !== undefined) {
+              fullAnswer += chunk.answer;
+            }
+            if (chunk.docs) {
+              sourceDocs = chunk.docs;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // 最终更新：附加来源和图表
         const charts = parseChartRequest(inputValue);
-        
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: aiResponse,
-          charts: charts
-        }]);
-        
+        let finalContent = fullAnswer;
+        if (sourceDocs.length > 0) {
+          finalContent += '\n\n---\n\n**📚 参考来源：**\n\n' + sourceDocs.join('\n');
+        }
+
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            content: finalContent,
+            charts: charts,
+          };
+          return updated;
+        });
+
         if (charts.length > 0) {
           try {
             const metricsRes = await axios.get('/api/dashboard/metrics');
