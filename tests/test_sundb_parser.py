@@ -14,6 +14,11 @@ SunDB .trc 日志解析器 — 单元测试
   9. CDC (cyrmte_*.trc) 解析
   10. gmon.trc 解析
   11. 文件级解析
+  12. 批量解析
+  13. 时间线构建
+  14. 故障事件提取
+  15. FaultEvent 数据结构
+  16. AEU 转换
 
 所有测试数据均来自真实 SunDB 集群日志（4 节点: G1N1, G1N2, G2N1, G2N2）。
 """
@@ -37,6 +42,11 @@ from server.diagnose.sundb_trc_parser import (
     SunDBListenerTrcParser,
     SunDBCdcTrcParser,
     SunDBGmonTrcParser,
+)
+from server.diagnose.sundb_batch_parser import (
+    SunDBBatchParser,
+    FaultEvent,
+    AEU,
 )
 
 
@@ -741,6 +751,288 @@ class TestFileLevel:
         parser = SunDBSystemTrcParser()
         entries = parser.parse_file(path)
         assert len(entries) == 1
+
+
+# ############################################################
+# 测试类 12: SunDBBatchParser — 批量解析
+# ############################################################
+
+class TestBatchParser:
+    """测试跨多个文件的批量解析"""
+
+    def setup_method(self):
+        self.tmpdir, self.trc_dir = create_temp_trc_dir()
+        write_trc_file(self.trc_dir, "system.trc", SYSTEM_TRC_MULTI_ENTRIES)
+        write_trc_file(self.trc_dir, "listener.trc", LISTENER_TRC_MULTI_ENTRIES)
+        write_trc_file(self.trc_dir, "cyrmte_TEST_13.trc", CDC_TRC_MULTI_ENTRIES)
+        gmon_content = GMON_TRC_HEADER + "\n" + GMON_ENTRY_WARMUP + "\n" + GMON_ENTRY_INIT
+        write_trc_file(self.trc_dir, "gmon.trc", gmon_content)
+
+    def teardown_method(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_parse_directory(self):
+        parser = SunDBBatchParser()
+        entries = parser.parse_directory(self.trc_dir)
+        assert len(entries) == 12
+
+    def test_auto_detect_file_type(self):
+        parser = SunDBBatchParser()
+        entries = parser.parse_directory(self.trc_dir)
+        sources = set(os.path.basename(e.source_file) for e in entries)
+        assert "system.trc" in sources
+        assert "listener.trc" in sources
+        assert "cyrmte_TEST_13.trc" in sources
+        assert "gmon.trc" in sources
+
+    def test_ignores_non_trc_files(self):
+        write_trc_file(self.trc_dir, "README", "This is not a trc file")
+        write_trc_file(self.trc_dir, "sundb.properties.conf", "some config")
+        parser = SunDBBatchParser()
+        entries = parser.parse_directory(self.trc_dir)
+        for e in entries:
+            assert not e.source_file.endswith(".conf")
+            assert not os.path.basename(e.source_file) == "README"
+
+    def test_parse_rotated_system_trc(self):
+        rotated = SYSTEM_TRC_HEADER + "\n" + SYSTEM_ENTRY_INFORMATION
+        write_trc_file(self.trc_dir, "system.trc_20240312_154855_0", rotated)
+        parser = SunDBBatchParser()
+        entries = parser.parse_directory(self.trc_dir)
+        assert len(entries) == 13
+
+    def test_parse_nonexistent_directory(self):
+        parser = SunDBBatchParser()
+        with pytest.raises(FileNotFoundError):
+            parser.parse_directory("/nonexistent/path")
+
+
+# ############################################################
+# 测试类 13: 时间线构建
+# ############################################################
+
+class TestTimeline:
+    """测试时间线排序"""
+
+    def setup_method(self):
+        self.parser = SunDBBatchParser()
+
+    def test_build_timeline_sorted(self):
+        system_parser = SunDBSystemTrcParser()
+        entries = system_parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        timeline = self.parser.build_timeline(entries)
+        for i in range(len(timeline) - 1):
+            assert timeline[i].timestamp <= timeline[i + 1].timestamp
+
+    def test_build_timeline_cross_file(self):
+        tmpdir, trc_dir = create_temp_trc_dir()
+        try:
+            write_trc_file(trc_dir, "system.trc", SYSTEM_TRC_MULTI_ENTRIES)
+            write_trc_file(trc_dir, "listener.trc", LISTENER_TRC_MULTI_ENTRIES)
+            all_entries = self.parser.parse_directory(trc_dir)
+            timeline = self.parser.build_timeline(all_entries)
+            for i in range(len(timeline) - 1):
+                assert timeline[i].timestamp <= timeline[i + 1].timestamp
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_empty_timeline(self):
+        timeline = self.parser.build_timeline([])
+        assert timeline == []
+
+
+# ############################################################
+# 测试类 14: 故障事件提取
+# ############################################################
+
+class TestFaultEventExtraction:
+    """测试从解析结果中提取故障事件"""
+
+    def setup_method(self):
+        self.batch_parser = SunDBBatchParser()
+        self.system_parser = SunDBSystemTrcParser()
+        self.cdc_parser = SunDBCdcTrcParser()
+
+    def test_extract_fatal_event(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_FATAL)
+        faults = self.batch_parser.extract_fault_events(entries)
+        assert len(faults) >= 1
+        fatal = [f for f in faults if f.event_type == "FATAL"]
+        assert len(fatal) == 1
+        assert fatal[0].severity == "critical"
+        assert fatal[0].instance == "G2N2"
+        assert fatal[0].error_code == "ERR-HY000(11000)"
+
+    def test_extract_deadlock_event(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_DEADLOCK)
+        faults = self.batch_parser.extract_fault_events(entries)
+        deadlocks = [f for f in faults if f.event_type == "DEADLOCK"]
+        assert len(deadlocks) == 1
+        assert deadlocks[0].severity == "high"
+        assert "CSII_SEC_ATTACTER" in deadlocks[0].description
+
+    def test_extract_ddl_failure_event(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_WARNING_DDL_FAILURE)
+        faults = self.batch_parser.extract_fault_events(entries)
+        ddl_failures = [f for f in faults if f.event_type == "DDL_FAILURE"]
+        assert len(ddl_failures) == 1
+        assert ddl_failures[0].error_code == "ERR-42000(15017)"
+        assert ddl_failures[0].severity == "medium"
+
+    def test_extract_auth_failure_from_cdc(self):
+        entries = self.cdc_parser.parse(CDC_ENTRY_AUTH_FAILURE)
+        faults = self.batch_parser.extract_fault_events(entries)
+        auth = [f for f in faults if f.event_type == "AUTH_FAILURE"]
+        assert len(auth) == 1
+        assert auth[0].error_code == "ERR-28000(16004)"
+        assert auth[0].severity == "high"
+
+    def test_extract_listener_failure(self):
+        listener_parser = SunDBListenerTrcParser()
+        entries = listener_parser.parse(LISTENER_ENTRY_FAILED)
+        faults = self.batch_parser.extract_fault_events(entries)
+        listener_fail = [f for f in faults if f.event_type == "LISTENER_FAILURE"]
+        assert len(listener_fail) == 1
+        assert listener_fail[0].severity == "high"
+
+    def test_no_fault_from_normal_entries(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_INFORMATION)
+        faults = self.batch_parser.extract_fault_events(entries)
+        assert len(faults) == 0
+
+    def test_extract_multiple_faults(self):
+        entries = self.system_parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        faults = self.batch_parser.extract_fault_events(entries)
+        event_types = [f.event_type for f in faults]
+        assert "FATAL" in event_types
+        assert "DDL_FAILURE" in event_types
+        assert "DEADLOCK" in event_types
+        assert "REBALANCE" not in event_types
+
+    def test_fault_event_has_related_entries(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_FATAL)
+        faults = self.batch_parser.extract_fault_events(entries)
+        assert len(faults[0].related_entries) >= 1
+        assert faults[0].related_entries[0].level == "FATAL"
+
+
+# ############################################################
+# 测试类 15: FaultEvent 数据结构
+# ############################################################
+
+class TestFaultEvent:
+    """测试 FaultEvent 数据类"""
+
+    def test_create_fault_event(self):
+        entry = SunDBLogEntry(
+            timestamp="2024-03-12 15:22:21.061484",
+            instance="G2N2",
+            thread_pid=3196761,
+            thread_tid=281464999703008,
+            level="FATAL",
+            message="[CLEANUP] abnormally terminated",
+            category="CLEANUP",
+            error_code="ERR-HY000(11000)",
+            error_message="Invalid argument",
+            source_file="system.trc",
+            raw_text="",
+        )
+        fault = FaultEvent(
+            event_type="FATAL",
+            timestamp="2024-03-12 15:22:21.061484",
+            instance="G2N2",
+            description="[CLEANUP] abnormally terminated",
+            error_code="ERR-HY000(11000)",
+            related_entries=[entry],
+            severity="critical",
+        )
+        assert fault.event_type == "FATAL"
+        assert fault.severity == "critical"
+        assert len(fault.related_entries) == 1
+
+
+# ############################################################
+# 测试类 16: AEU（原子依据单元）转换
+# ############################################################
+
+class TestAEUConversion:
+    """测试 FaultEvent -> AEU 转换"""
+
+    def setup_method(self):
+        self.batch_parser = SunDBBatchParser()
+        self.system_parser = SunDBSystemTrcParser()
+
+    def _get_fatal_fault(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_FATAL)
+        faults = self.batch_parser.extract_fault_events(entries)
+        return faults
+
+    def test_aeu_from_fatal(self):
+        faults = self._get_fatal_fault()
+        aeu_list = self.batch_parser.to_aeu_list(faults)
+        assert len(aeu_list) == 1
+        aeu = aeu_list[0]
+        assert aeu.event_id != ""
+        assert aeu.timestamp == "2024-03-12 15:22:21.061484"
+        assert aeu.event_type == "FATAL"
+        assert "instance" in aeu.key_fields
+        assert aeu.key_fields["instance"] == "G2N2"
+        assert "error_code" in aeu.key_fields
+        assert aeu.key_fields["error_code"] == "ERR-HY000(11000)"
+        assert aeu.raw_log_snippet != ""
+
+    def test_aeu_unique_ids(self):
+        entries = self.system_parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        faults = self.batch_parser.extract_fault_events(entries)
+        aeu_list = self.batch_parser.to_aeu_list(faults)
+        ids = [a.event_id for a in aeu_list]
+        assert len(ids) == len(set(ids))
+
+    def test_aeu_has_raw_snippet(self):
+        faults = self._get_fatal_fault()
+        aeu_list = self.batch_parser.to_aeu_list(faults)
+        aeu = aeu_list[0]
+        assert "abnormally terminated" in aeu.raw_log_snippet
+        assert "ERR-HY000(11000)" in aeu.raw_log_snippet
+
+    def test_aeu_deadlock_key_fields(self):
+        entries = self.system_parser.parse(SYSTEM_ENTRY_DEADLOCK)
+        faults = self.batch_parser.extract_fault_events(entries)
+        aeu_list = self.batch_parser.to_aeu_list(faults)
+        assert len(aeu_list) == 1
+        aeu = aeu_list[0]
+        assert aeu.event_type == "DEADLOCK"
+        assert "session_id" in aeu.key_fields
+        assert aeu.key_fields["session_id"] == "137"
+        assert "sql" in aeu.key_fields
+        assert "CSII_SEC_ATTACTER" in aeu.key_fields["sql"]
+
+    def test_aeu_from_empty_faults(self):
+        aeu_list = self.batch_parser.to_aeu_list([])
+        assert aeu_list == []
+
+
+# ############################################################
+# 测试类 17: AEU 数据结构
+# ############################################################
+
+class TestAEUDataClass:
+    """测试 AEU 数据类"""
+
+    def test_create_aeu(self):
+        aeu = AEU(
+            event_id="FATAL-G2N2-20240312152221",
+            timestamp="2024-03-12 15:22:21.061484",
+            event_type="FATAL",
+            key_fields={
+                "instance": "G2N2",
+                "error_code": "ERR-HY000(11000)",
+            },
+            raw_log_snippet="[CLEANUP] abnormally terminated\nERR-HY000(11000): ...",
+        )
+        assert aeu.event_id.startswith("FATAL")
+        assert aeu.event_type == "FATAL"
+        assert aeu.key_fields["instance"] == "G2N2"
 
 
 # ############################################################
