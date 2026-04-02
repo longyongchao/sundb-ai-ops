@@ -524,8 +524,17 @@ const KnowledgeChat = () => {
         // 最终更新：附加来源和图表
         const charts = parseChartRequest(inputValue);
         let finalContent = fullAnswer;
-        if (sourceDocs.length > 0) {
-          finalContent += '\n\n---\n\n**📚 参考来源：**\n\n' + sourceDocs.join('\n');
+        
+        // 过滤掉无效的参考来源（如"未找到相关文档"）
+        const validSourceDocs = sourceDocs.filter(doc => 
+          doc && 
+          !doc.includes('未找到相关文档') && 
+          !doc.includes('大模型自身能力解答') &&
+          doc.trim().length > 5
+        );
+        
+        if (validSourceDocs.length > 0) {
+          finalContent += '\n\n---\n\n**📚 参考来源：**\n\n' + validSourceDocs.join('\n');
         }
 
         setMessages(prev => {
