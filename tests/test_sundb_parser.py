@@ -19,6 +19,10 @@ SunDB .trc 日志解析器 — 单元测试
   14. 故障事件提取
   15. FaultEvent 数据结构
   16. AEU 转换
+  17. AEU 数据结构
+  18. 真实文件集成测试
+  19. 边界情况和健壮性
+  20. 统计功能
 
 所有测试数据均来自真实 SunDB 集群日志（4 节点: G1N1, G1N2, G2N1, G2N2）。
 """
@@ -1033,6 +1037,219 @@ class TestAEUDataClass:
         assert aeu.event_id.startswith("FATAL")
         assert aeu.event_type == "FATAL"
         assert aeu.key_fields["instance"] == "G2N2"
+
+
+# ############################################################
+# 测试类 18: 使用真实测试文件（集成测试）
+# ############################################################
+
+# 真实日志路径
+REAL_TRC_BASE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "测试文件", "trc", "extracted",
+)
+
+REAL_G1N1_TRC = os.path.join(REAL_TRC_BASE, "g1n1", "trc")
+REAL_G2N1_TRC = os.path.join(REAL_TRC_BASE, "g2n1", "trc")
+REAL_G2N2_TRC = os.path.join(REAL_TRC_BASE, "g2n2", "trc")
+
+real_files_exist = os.path.isdir(REAL_G1N1_TRC)
+
+
+@pytest.mark.skipif(not real_files_exist, reason="真实测试文件不存在")
+class TestRealFiles:
+    """使用真实 SunDB 集群日志的集成测试"""
+
+    def test_parse_g1n1_system_trc(self):
+        parser = SunDBSystemTrcParser()
+        path = os.path.join(REAL_G1N1_TRC, "system.trc")
+        entries = parser.parse_file(path)
+        assert len(entries) > 100
+        for e in entries[:10]:
+            assert e.timestamp != ""
+            assert e.instance == "G1N1"
+
+    def test_real_file_has_warning_entries(self):
+        parser = SunDBSystemTrcParser()
+        path = os.path.join(REAL_G1N1_TRC, "system.trc")
+        entries = parser.parse_file(path)
+        warnings = [e for e in entries if e.level == "WARNING"]
+        assert len(warnings) > 0
+
+    def test_real_file_has_ddl_failures(self):
+        parser = SunDBSystemTrcParser()
+        path = os.path.join(REAL_G1N1_TRC, "system.trc")
+        entries = parser.parse_file(path)
+        ddl_fail = [e for e in entries if "DDL failure" in e.message]
+        assert len(ddl_fail) > 0
+        # DDL failures should all have error codes
+        for e in ddl_fail:
+            assert e.error_code.startswith("ERR-")
+
+    @pytest.mark.skipif(
+        not os.path.isdir(REAL_G2N2_TRC),
+        reason="G2N2 测试文件不存在",
+    )
+    def test_real_g2n2_has_fatal(self):
+        parser = SunDBSystemTrcParser()
+        path = os.path.join(REAL_G2N2_TRC, "system.trc")
+        entries = parser.parse_file(path)
+        fatals = [e for e in entries if e.level == "FATAL"]
+        assert len(fatals) >= 1
+        assert fatals[0].error_code == "ERR-HY000(11000)"
+
+    @pytest.mark.skipif(
+        not os.path.isdir(REAL_G2N1_TRC),
+        reason="G2N1 测试文件不存在",
+    )
+    def test_real_g2n1_has_deadlock(self):
+        parser = SunDBSystemTrcParser()
+        rotated = os.path.join(REAL_G2N1_TRC, "system.trc_20240312_154855_0")
+        if not os.path.exists(rotated):
+            pytest.skip("旋转文件不存在")
+        entries = parser.parse_file(rotated)
+        deadlocks = [e for e in entries if e.category == "DEADLOCK"]
+        assert len(deadlocks) >= 2
+
+    def test_real_listener_trc(self):
+        parser = SunDBListenerTrcParser()
+        path = os.path.join(REAL_G1N1_TRC, "listener.trc")
+        entries = parser.parse_file(path)
+        assert len(entries) > 0
+        messages = " ".join(e.message for e in entries)
+        assert "LISTENER" in messages
+
+    def test_real_cdc_trc(self):
+        parser = SunDBCdcTrcParser()
+        path = os.path.join(REAL_G1N1_TRC, "cyrmte_TEST_13.trc")
+        if not os.path.exists(path):
+            pytest.skip("CDC 文件不存在")
+        entries = parser.parse_file(path)
+        assert len(entries) > 0
+        messages = " ".join(e.message for e in entries)
+        assert "LSN" in messages
+
+    def test_real_batch_parse_g1n1(self):
+        batch = SunDBBatchParser()
+        entries = batch.parse_directory(REAL_G1N1_TRC)
+        assert len(entries) > 1000
+
+    def test_real_fault_extraction(self):
+        batch = SunDBBatchParser()
+        parser = SunDBSystemTrcParser()
+        if not os.path.isdir(REAL_G2N2_TRC):
+            pytest.skip("G2N2 不存在")
+        entries = parser.parse_file(os.path.join(REAL_G2N2_TRC, "system.trc"))
+        faults = batch.extract_fault_events(entries)
+        assert len(faults) >= 1
+        event_types = [f.event_type for f in faults]
+        assert "FATAL" in event_types
+
+    def test_real_aeu_conversion(self):
+        if not os.path.isdir(REAL_G2N2_TRC):
+            pytest.skip("G2N2 不存在")
+        batch = SunDBBatchParser()
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse_file(os.path.join(REAL_G2N2_TRC, "system.trc"))
+        faults = batch.extract_fault_events(entries)
+        aeu_list = batch.to_aeu_list(faults)
+        assert len(aeu_list) >= 1
+        for aeu in aeu_list:
+            assert aeu.event_id != ""
+            assert aeu.timestamp != ""
+            assert aeu.event_type != ""
+            assert aeu.raw_log_snippet != ""
+
+
+# ############################################################
+# 测试类 19: 边界情况和健壮性
+# ############################################################
+
+class TestEdgeCases:
+    """边界情况测试"""
+
+    def test_malformed_timestamp(self):
+        bad = "[NOT-A-TIMESTAMP INSTANCE(G1N1) THREAD(123,456)] [INFORMATION]\nsome message\n"
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(bad)
+        assert isinstance(entries, list)
+
+    def test_truncated_entry(self):
+        truncated = "[2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION]\n"
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(truncated)
+        assert isinstance(entries, list)
+
+    def test_mixed_encoding(self):
+        content = SYSTEM_TRC_HEADER + "\n" + SYSTEM_ENTRY_INFORMATION
+        tmpdir, trc_dir = create_temp_trc_dir()
+        try:
+            path = os.path.join(trc_dir, "system.trc")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            parser = SunDBSystemTrcParser()
+            entries = parser.parse_file(path)
+            assert len(entries) == 1
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_extra_blank_lines(self):
+        content = (
+            SYSTEM_ENTRY_INFORMATION
+            + "\n\n\n"
+            + SYSTEM_ENTRY_FATAL
+        )
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(content)
+        assert len(entries) == 2
+
+    def test_very_long_message(self):
+        long_msg = "[2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(1,2)] [INFORMATION]\n"
+        long_msg += "    " + "A" * 10000 + "\n"
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(long_msg)
+        assert len(entries) == 1
+        assert len(entries[0].message) >= 10000
+
+    def test_consecutive_headers(self):
+        content = SYSTEM_TRC_HEADER + "\n" + SYSTEM_TRC_HEADER + "\n" + SYSTEM_ENTRY_INFORMATION
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(content)
+        assert len(entries) >= 1
+
+
+# ############################################################
+# 测试类 20: 统计功能
+# ############################################################
+
+class TestStatistics:
+    """测试日志统计功能"""
+
+    def test_count_by_level(self):
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        levels = {}
+        for e in entries:
+            levels[e.level] = levels.get(e.level, 0) + 1
+        assert levels["INFORMATION"] == 2
+        assert levels["WARNING"] == 1
+        assert levels["FATAL"] == 1
+
+    def test_count_by_category(self):
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        categories = set(e.category for e in entries)
+        assert "REBALANCE" in categories
+        assert "CLEANUP" in categories
+        assert "DEADLOCK" in categories
+
+    def test_count_error_codes(self):
+        parser = SunDBSystemTrcParser()
+        entries = parser.parse(SYSTEM_TRC_MULTI_ENTRIES)
+        error_codes = [e.error_code for e in entries if e.error_code]
+        assert len(error_codes) == 2
+        assert "ERR-42000(15017)" in error_codes
+        assert "ERR-HY000(11000)" in error_codes
 
 
 # ############################################################
