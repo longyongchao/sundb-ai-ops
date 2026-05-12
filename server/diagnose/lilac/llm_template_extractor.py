@@ -55,13 +55,11 @@ class LLMTemplateExtractor:
     ) -> Optional[LogTemplate]:
         """调用 LLM 提取模板，失败返回 None"""
         try:
-            from server.utils import get_ChatOpenAI, with_llm_semaphore
+            from server.utils import get_ChatOpenAI
 
             prompt = build_prompt(demonstrations, masked_log)
             llm = get_ChatOpenAI(temperature=self._temperature)
-
-            with with_llm_semaphore():
-                response = llm.predict(prompt)
+            response = llm.predict(prompt)
 
             template_str = self._parse_response(response, masked_log)
             if template_str is None:
