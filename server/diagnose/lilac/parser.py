@@ -87,6 +87,10 @@ class LilacParser:
 
         parameters = self._extract_parameters(preprocessed.tokens, template)
 
+        metadata = dict(preprocessed.header_fields)
+        if source:
+            metadata["_parse_source"] = source
+
         return GenericLogEntry(
             timestamp=preprocessed.header_fields.get("timestamp", ""),
             level=preprocessed.header_fields.get("level", ""),
@@ -96,7 +100,7 @@ class LilacParser:
             source_file=source_file,
             line_number=line_number,
             raw_text=raw_line,
-            metadata=preprocessed.header_fields,
+            metadata=metadata,
         )
 
     def parse_content(self, content: str, source_file: str = "") -> ParseResult:
@@ -114,15 +118,13 @@ class LilacParser:
             entry = self.parse_line(line, source_file=source_file, line_number=i)
             entries.append(entry)
 
-            if entry.template:
-                if entry.template.source == "cache" or (
-                    entry.template.hit_count > 1
-                ):
-                    cache_hits += 1
-                elif entry.template.source == "llm":
-                    llm_calls += 1
-                elif entry.template.source == "drain3":
-                    drain3_fallbacks += 1
+            parse_source = entry.metadata.get("_parse_source", "")
+            if parse_source == "cache":
+                cache_hits += 1
+            elif parse_source == "llm":
+                llm_calls += 1
+            elif parse_source == "drain3":
+                drain3_fallbacks += 1
 
         elapsed_ms = (time.time() - start) * 1000.0
 
