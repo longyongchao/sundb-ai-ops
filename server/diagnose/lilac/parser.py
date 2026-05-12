@@ -106,16 +106,16 @@ class LilacParser:
     def parse_content(self, content: str, source_file: str = "") -> ParseResult:
         """解析日志文本内容"""
         start = time.time()
-        lines = content.splitlines()
+        raw_lines = content.splitlines()
+        assembled = self._assemble_multiline(raw_lines)
+
         entries: List[GenericLogEntry] = []
         cache_hits = 0
         llm_calls = 0
         drain3_fallbacks = 0
 
-        for i, line in enumerate(lines, 1):
-            if not line.strip():
-                continue
-            entry = self.parse_line(line, source_file=source_file, line_number=i)
+        for line_num, line in assembled:
+            entry = self.parse_line(line, source_file=source_file, line_number=line_num)
             entries.append(entry)
 
             parse_source = entry.metadata.get("_parse_source", "")
@@ -135,6 +135,35 @@ class LilacParser:
             drain3_fallbacks=drain3_fallbacks,
             parse_time_ms=elapsed_ms,
         )
+
+    def _assemble_multiline(self, raw_lines: List[str]) -> List[tuple]:
+        """组装多行日志（处理 SunDB 等 header/body 分行格式）
+
+        返回 [(line_number, assembled_line), ...]
+        """
+        result = []
+        i = 0
+        while i < len(raw_lines):
+            line = raw_lines[i]
+            if not line.strip():
+                i += 1
+                continue
+
+            preprocessed = self._preprocessor.preprocess(line)
+
+            # Header-only line: matched a header pattern but body is empty
+            if (preprocessed.header_format != "unknown"
+                    and not preprocessed.body
+                    and i + 1 < len(raw_lines)
+                    and raw_lines[i + 1].strip()):
+                merged = line + " " + raw_lines[i + 1].strip()
+                result.append((i + 1, merged))
+                i += 2
+            else:
+                result.append((i + 1, line))
+                i += 1
+
+        return result
 
     def parse_file(self, file_path: str) -> ParseResult:
         """解析日志文件"""
