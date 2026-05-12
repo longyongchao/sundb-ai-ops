@@ -45,7 +45,7 @@ class AdaptiveParsingCache:
     def __init__(self, db_path: str, similarity_threshold: float = 0.85):
         self._db_path = db_path
         self._threshold = similarity_threshold
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
         os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -164,10 +164,12 @@ class AdaptiveParsingCache:
     def _record_hit(self, template: LogTemplate) -> None:
         template.hit_count += 1
         template.last_hit_at = time.time()
-        self._conn.execute(
-            "UPDATE templates SET hit_count = ?, last_hit_at = ? WHERE template_id = ?",
-            (template.hit_count, template.last_hit_at, template.template_id),
-        )
+        with self._lock:
+            self._conn.execute(
+                "UPDATE templates SET hit_count = ?, last_hit_at = ? WHERE template_id = ?",
+                (template.hit_count, template.last_hit_at, template.template_id),
+            )
+            self._conn.commit()
 
     def get_statistics(self) -> Dict[str, int]:
         total_templates = sum(
