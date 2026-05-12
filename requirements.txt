@@ -82,3 +82,6 @@ watchdog>=3.0.0
 
 # index advisor tool
 index-eab==0.1.0
+
+# LILAC log parsing
+drain3>=0.9.11
