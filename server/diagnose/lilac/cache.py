@@ -60,6 +60,7 @@ class AdaptiveParsingCache:
         self._conn.commit()
 
         self._cache: Dict[int, Dict[str, List[LogTemplate]]] = {}
+        self._token_sig_index: Dict[tuple, LogTemplate] = {}
         self._load_into_memory()
 
     def _load_into_memory(self) -> None:
@@ -91,9 +92,16 @@ class AdaptiveParsingCache:
         return candidates
 
     def lookup(self, tokens: List[str]) -> Optional[LogTemplate]:
-        """缓存查找：精确匹配 → 模糊 ±1 token 匹配"""
+        """缓存查找：签名精确匹配 → 相似度匹配 → 模糊 ±1 token 匹配"""
         if not tokens:
             return None
+
+        # (0) token 签名精确匹配（处理 LLM 模板 token 结构与输入不一致的情况）
+        sig = tuple(tokens)
+        sig_hit = self._token_sig_index.get(sig)
+        if sig_hit is not None:
+            self._record_hit(sig_hit)
+            return sig_hit
 
         token_count = len(tokens)
         first_token = tokens[0]
@@ -133,12 +141,19 @@ class AdaptiveParsingCache:
 
         return None
 
-    def insert(self, template: LogTemplate, raw_example: Optional[str] = None) -> LogTemplate:
-        """插入新模板到缓存（去重）"""
+    def insert(self, template: LogTemplate, raw_example: Optional[str] = None,
+               lookup_tokens: Optional[List[str]] = None) -> LogTemplate:
+        """插入新模板到缓存（去重）
+
+        lookup_tokens: 如果模板的 token 结构与输入不一致（如 LLM 合并了多个 token），
+                       传入原始输入的 tokens 用于建立签名索引。
+        """
         with self._lock:
             existing = self._find_equivalent(template.template_str)
             if existing:
                 self._record_hit(existing)
+                if lookup_tokens:
+                    self._token_sig_index[tuple(lookup_tokens)] = existing
                 return existing
 
             now = time.time()
@@ -174,6 +189,9 @@ class AdaptiveParsingCache:
 
             bucket = self._cache.setdefault(template.token_count, {})
             bucket.setdefault(template.first_token, []).append(template)
+
+            if lookup_tokens:
+                self._token_sig_index[tuple(lookup_tokens)] = template
 
             if self._merge_enabled:
                 self._try_merge_after_insert(template)
@@ -411,6 +429,7 @@ class AdaptiveParsingCache:
             )
             self._conn.commit()
             self._cache.clear()
+            self._token_sig_index.clear()
 
     def close(self) -> None:
         self._conn.close()

@@ -74,14 +74,20 @@ class LilacParser:
                 preprocessed.masked_body, demos
             )
             if template:
-                self._cache.insert(template, preprocessed.masked_body)
+                self._cache.insert(
+                    template, preprocessed.masked_body,
+                    lookup_tokens=preprocessed.tokens,
+                )
                 return template, "llm"
 
         # (4) Drain3 兜底
         if self._drain3 and self._drain3.available:
             template = self._drain3.parse(preprocessed.masked_body)
             if template:
-                self._cache.insert(template, preprocessed.masked_body)
+                self._cache.insert(
+                    template, preprocessed.masked_body,
+                    lookup_tokens=preprocessed.tokens,
+                )
                 return template, "drain3"
 
         return None, ""
