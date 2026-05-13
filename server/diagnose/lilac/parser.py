@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from server.diagnose.lilac.cache import AdaptiveParsingCache
 from server.diagnose.lilac.config import LilacConfig
@@ -12,7 +12,7 @@ from server.diagnose.lilac.demonstration_pool import DemonstrationPool
 from server.diagnose.lilac.drain3_fallback import Drain3Fallback
 from server.diagnose.lilac.llm_template_extractor import LLMTemplateExtractor
 from server.diagnose.lilac.models import GenericLogEntry, LogTemplate, ParseResult
-from server.diagnose.lilac.preprocessor import LogPreprocessor
+from server.diagnose.lilac.preprocessor import LogPreprocessor, PreprocessedLine
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class LilacParser:
     """LILAC 统一日志解析器
 
-    流程：预处理 → 缓存查找 → LLM 提取 → Drain3 兜底
+    流程：预处理 → 静态快捷 → 缓存查找 → LLM 提取 → Drain3 兜底
     """
 
     def __init__(self, config: Optional[LilacConfig] = None):
@@ -30,6 +30,7 @@ class LilacParser:
         self._cache = AdaptiveParsingCache(
             db_path=self._config.cache_db_path,
             similarity_threshold=self._config.cache_similarity_threshold,
+            merge_enabled=self._config.template_merge_enabled,
         )
         self._demo_pool = DemonstrationPool(
             conn=self._cache._conn,
@@ -41,6 +42,49 @@ class LilacParser:
         ) if self._config.enable_llm else None
 
         self._drain3 = Drain3Fallback() if self._config.enable_drain3 else None
+
+    def _resolve_template(
+        self, preprocessed: PreprocessedLine
+    ) -> Tuple[Optional[LogTemplate], str]:
+        """解析模板核心逻辑：缓存 → 静态快捷 → LLM → Drain3
+
+        返回 (template, source_str)
+        """
+        if not preprocessed.tokens:
+            return None, ""
+
+        # (1) 缓存查找
+        template = self._cache.lookup(preprocessed.tokens)
+        if template:
+            return template, "cache"
+
+        # (2) 静态行快捷路径：预处理后无任何变量，直接作为模板
+        if (preprocessed.masked_body == preprocessed.body
+                and "<*>" not in preprocessed.masked_body):
+            template = LogTemplate.from_template_str(preprocessed.body, source="static")
+            self._cache.insert(template, preprocessed.body)
+            return template, "static"
+
+        # (3) LLM 提取
+        if self._llm_extractor:
+            demos = self._demo_pool.sample(
+                preprocessed.tokens, k=self._config.demo_sample_k
+            )
+            template = self._llm_extractor.extract(
+                preprocessed.masked_body, demos
+            )
+            if template:
+                self._cache.insert(template, preprocessed.masked_body)
+                return template, "llm"
+
+        # (4) Drain3 兜底
+        if self._drain3 and self._drain3.available:
+            template = self._drain3.parse(preprocessed.masked_body)
+            if template:
+                self._cache.insert(template, preprocessed.masked_body)
+                return template, "drain3"
+
+        return None, ""
 
     def parse_line(
         self, raw_line: str, source_file: str = "", line_number: int = 0
@@ -59,32 +103,7 @@ class LilacParser:
                 level=preprocessed.header_fields.get("level", ""),
             )
 
-        template: Optional[LogTemplate] = None
-        source = ""
-
-        # (1) 缓存查找
-        template = self._cache.lookup(preprocessed.tokens)
-        if template:
-            source = "cache"
-        else:
-            # (2) LLM 提取
-            if self._llm_extractor:
-                demos = self._demo_pool.sample(
-                    preprocessed.tokens, k=self._config.demo_sample_k
-                )
-                template = self._llm_extractor.extract(
-                    preprocessed.masked_body, demos
-                )
-                if template:
-                    source = "llm"
-                    self._cache.insert(template, preprocessed.masked_body)
-
-            # (3) Drain3 兜底
-            if template is None and self._drain3 and self._drain3.available:
-                template = self._drain3.parse(preprocessed.masked_body)
-                if template:
-                    source = "drain3"
-                    self._cache.insert(template, preprocessed.masked_body)
+        template, source = self._resolve_template(preprocessed)
 
         raw_body_tokens = preprocessed.body.split() if preprocessed.body else preprocessed.raw_text.split()
         parameters = self._extract_parameters(raw_body_tokens, template)
@@ -106,7 +125,7 @@ class LilacParser:
         )
 
     def parse_content(self, content: str, source_file: str = "") -> ParseResult:
-        """解析日志文本内容"""
+        """解析日志文本内容（批量去重优化）"""
         start = time.time()
         raw_lines = content.splitlines()
         assembled = self._assemble_multiline(raw_lines)
@@ -114,39 +133,101 @@ class LilacParser:
 
         logger.info(f"[LILAC] 开始解析: {total} 条日志 (source={source_file or 'text'})")
 
+        # === Pass 1: 预处理所有行 + 按 token 签名分组 ===
+        preprocessed_lines: List[Tuple[int, str, PreprocessedLine]] = []
+        groups = {}  # tuple(tokens) -> 组内第一个索引
+
+        for line_num, line in assembled:
+            preprocessed = self._preprocessor.preprocess(line)
+            preprocessed_lines.append((line_num, line, preprocessed))
+
+            if preprocessed.tokens:
+                key = tuple(preprocessed.tokens)
+                if key not in groups:
+                    groups[key] = len(preprocessed_lines) - 1
+
+        unique_groups = len(groups)
+        logger.info(f"[LILAC] 批量去重: {total} 行 → {unique_groups} 个唯一模式")
+
+        # === Pass 2: 每组解析一个代表 ===
+        resolved = {}  # tuple(tokens) -> (template, source_str)
+
+        resolved_count = 0
+        for key, rep_idx in groups.items():
+            _, _, preprocessed = preprocessed_lines[rep_idx]
+            template, source_str = self._resolve_template(preprocessed)
+            resolved[key] = (template, source_str)
+            resolved_count += 1
+
+            if source_str == "llm":
+                logger.info(
+                    f"[LILAC] [{resolved_count}/{unique_groups}] LLM调用 | "
+                    f"唯一模式 #{resolved_count}"
+                )
+
+        # === Pass 3: 按原始顺序构建结果 ===
         entries: List[GenericLogEntry] = []
         cache_hits = 0
         llm_calls = 0
         drain3_fallbacks = 0
+        static_shortcuts = 0
+        batch_dedup = 0
 
-        for idx, (line_num, line) in enumerate(assembled, 1):
-            entry = self.parse_line(line, source_file=source_file, line_number=line_num)
-            entries.append(entry)
+        for idx, (line_num, line, preprocessed) in enumerate(preprocessed_lines):
+            if not preprocessed.tokens:
+                entries.append(GenericLogEntry(
+                    raw_text=line,
+                    message=preprocessed.body or line,
+                    source_file=source_file,
+                    line_number=line_num,
+                    metadata=preprocessed.header_fields,
+                    timestamp=preprocessed.header_fields.get("timestamp", ""),
+                    level=preprocessed.header_fields.get("level", ""),
+                ))
+                continue
 
-            parse_source = entry.metadata.get("_parse_source", "")
-            if parse_source == "cache":
-                cache_hits += 1
-            elif parse_source == "llm":
-                llm_calls += 1
-                logger.info(
-                    f"[LILAC] [{idx}/{total}] LLM调用 #{llm_calls} | "
-                    f"缓存命中: {cache_hits} | line={line_num}"
-                )
-            elif parse_source == "drain3":
-                drain3_fallbacks += 1
+            key = tuple(preprocessed.tokens)
+            template, source = resolved.get(key, (None, ""))
 
-            if idx % 50 == 0 or idx == total:
-                elapsed = (time.time() - start) * 1000.0
-                logger.info(
-                    f"[LILAC] 进度 {idx}/{total} | "
-                    f"缓存命中: {cache_hits}, LLM: {llm_calls}, Drain3: {drain3_fallbacks} | "
-                    f"耗时: {elapsed:.0f}ms"
-                )
+            # 统计
+            rep_idx = groups.get(key)
+            is_representative = (rep_idx == idx)
+            if is_representative:
+                if source == "cache":
+                    cache_hits += 1
+                elif source == "llm":
+                    llm_calls += 1
+                elif source == "drain3":
+                    drain3_fallbacks += 1
+                elif source == "static":
+                    static_shortcuts += 1
+            else:
+                batch_dedup += 1
+
+            raw_body_tokens = preprocessed.body.split() if preprocessed.body else line.split()
+            parameters = self._extract_parameters(raw_body_tokens, template)
+
+            metadata = dict(preprocessed.header_fields)
+            if source:
+                metadata["_parse_source"] = source
+
+            entries.append(GenericLogEntry(
+                timestamp=preprocessed.header_fields.get("timestamp", ""),
+                level=preprocessed.header_fields.get("level", ""),
+                message=preprocessed.body,
+                template=template,
+                parameters=parameters,
+                source_file=source_file,
+                line_number=line_num,
+                raw_text=line,
+                metadata=metadata,
+            ))
 
         elapsed_ms = (time.time() - start) * 1000.0
         logger.info(
             f"[LILAC] 解析完成: {total} 条 | "
-            f"缓存命中: {cache_hits}, LLM: {llm_calls}, Drain3: {drain3_fallbacks} | "
+            f"缓存: {cache_hits}, LLM: {llm_calls}, 静态: {static_shortcuts}, "
+            f"去重: {batch_dedup}, Drain3: {drain3_fallbacks} | "
             f"总耗时: {elapsed_ms:.0f}ms"
         )
 
@@ -155,6 +236,8 @@ class LilacParser:
             cache_hits=cache_hits,
             llm_calls=llm_calls,
             drain3_fallbacks=drain3_fallbacks,
+            static_shortcuts=static_shortcuts,
+            batch_dedup=batch_dedup,
             parse_time_ms=elapsed_ms,
         )
 
@@ -173,7 +256,6 @@ class LilacParser:
 
             preprocessed = self._preprocessor.preprocess(line)
 
-            # Header-only line: matched a header pattern but body is empty
             if (preprocessed.header_format != "unknown"
                     and not preprocessed.body
                     and i + 1 < len(raw_lines)
@@ -206,18 +288,15 @@ class LilacParser:
 
         try:
             raw_text = " ".join(log_tokens)
-            # Convert template to regex: escape literal parts, replace <*> with capture group
             parts = template.template_str.split("<*>")
             regex_parts = [re.escape(p) for p in parts]
             pattern = "(.*?)".join(regex_parts)
-            # Allow flexible whitespace matching
             pattern = re.sub(r'\\ ', r'\\s+', pattern)
 
             m = re.fullmatch(pattern, raw_text, re.DOTALL)
             if m:
                 return [g for g in m.groups() if g]
 
-            # fallback: non-greedy from start
             m = re.match(pattern, raw_text, re.DOTALL)
             if m:
                 return [g for g in m.groups() if g]
