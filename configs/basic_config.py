@@ -26,6 +26,13 @@ LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 if not os.path.exists(LOG_PATH):
     os.mkdir(LOG_PATH)
 
+# 确保 fastchat 日志也写入 logs/ 目录（无论从哪个入口启动）
+try:
+    import fastchat.constants
+    fastchat.constants.LOGDIR = LOG_PATH
+except ImportError:
+    pass
+
 # 临时文件目录，主要用于文件对话
 BASE_TEMP_DIR = os.path.join(tempfile.gettempdir(), "chatchat")
 if os.path.isdir(BASE_TEMP_DIR):
