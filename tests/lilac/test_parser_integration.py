@@ -40,7 +40,7 @@ class TestParserIntegration:
     @patch("server.utils.get_ChatOpenAI")
     def test_llm_path_with_mock(self, mock_get_llm, tmp_cache_db):
         mock_llm = MagicMock()
-        mock_llm.predict.return_value = '{"template": "Error connecting to <*>", "variables": ["db-host"]}'
+        mock_llm.predict.return_value = '{"template": "Error connecting to <*> on port <*>", "variables": ["192.168.1.100", "5432"]}'
         mock_get_llm.return_value = mock_llm
 
         os.environ["LILAC_CACHE_DB_PATH"] = tmp_cache_db
@@ -50,7 +50,7 @@ class TestParserIntegration:
         from server.diagnose.lilac.parser import LilacParser
         parser = LilacParser(LilacConfig())
 
-        entry = parser.parse_line("2024-01-01 10:00:00 ERROR Error connecting to db-host")
+        entry = parser.parse_line("2024-01-01 10:00:00 ERROR Error connecting to 192.168.1.100 on port 5432")
         assert entry.template is not None
         assert entry.template.source == "llm"
         assert "<*>" in entry.template.template_str
@@ -64,10 +64,10 @@ class TestParserIntegration:
         from server.diagnose.lilac.parser import LilacParser
         parser = LilacParser(LilacConfig())
 
-        entry = parser.parse_line("2024-01-01 10:00:00 ERROR Something broke")
-        # Should not crash, template is None
+        entry = parser.parse_line("2024-01-01 10:00:00 ERROR Connection to 10.0.0.5 failed after 30s")
+        # LLM init fails, no drain3 → template should be None for variable-containing lines
         assert entry.template is None
-        assert entry.message == "Something broke"
+        assert "Connection to" in entry.message
 
     def test_parse_file(self, tmp_cache_db, sample_logs_dir):
         parser = self._make_parser(tmp_cache_db)
