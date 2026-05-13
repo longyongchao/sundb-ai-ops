@@ -54,3 +54,58 @@ def token_similarity(log_tokens: List[str], template_tokens: List[str]) -> float
             matches += 1
 
     return matches / len(log_tokens)
+
+
+def token_similarity_fuzzy(
+    log_tokens: List[str],
+    template_tokens: List[str],
+    penalty: float = 0.95,
+) -> float:
+    """模糊相似度：允许 ±1 token 差异
+
+    当长度差 1 时，在较长序列中尝试每个 skip 位置，
+    对齐后计算匹配度，乘以 penalty 惩罚因子。
+    精确匹配时直接委托 token_similarity()。
+    """
+    n_log = len(log_tokens)
+    n_tpl = len(template_tokens)
+
+    if n_log == n_tpl:
+        return token_similarity(log_tokens, template_tokens)
+
+    if abs(n_log - n_tpl) != 1:
+        return 0.0
+
+    if not log_tokens or not template_tokens:
+        return 0.0
+
+    if n_log > n_tpl:
+        longer, shorter = log_tokens, template_tokens
+        log_is_longer = True
+    else:
+        longer, shorter = template_tokens, log_tokens
+        log_is_longer = False
+
+    n_longer = len(longer)
+    n_shorter = len(shorter)
+    best_score = 0.0
+
+    for skip in range(n_longer):
+        matches = 0
+        j = 0
+        for i in range(n_longer):
+            if i == skip:
+                continue
+            if log_is_longer:
+                if _token_matches(longer[i], shorter[j]):
+                    matches += 1
+            else:
+                if _token_matches(shorter[j], longer[i]):
+                    matches += 1
+            j += 1
+
+        score = matches / n_shorter
+        if score > best_score:
+            best_score = score
+
+    return best_score * penalty
