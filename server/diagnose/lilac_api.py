@@ -52,6 +52,7 @@ async def lilac_parse(
 
         entries_data = []
         for e in result.entries:
+            metadata = {k: v for k, v in e.metadata.items() if not k.startswith("_")}
             entry_dict = {
                 "timestamp": e.timestamp,
                 "level": e.level,
@@ -60,6 +61,7 @@ async def lilac_parse(
                 "template": e.template.template_str if e.template else None,
                 "template_source": e.template.source if e.template else None,
                 "parameters": e.parameters,
+                "metadata": metadata if metadata else None,
             }
             entries_data.append(entry_dict)
 
@@ -92,6 +94,7 @@ async def lilac_parse_text(
 
         entries_data = []
         for e in result.entries:
+            metadata = {k: v for k, v in e.metadata.items() if not k.startswith("_")}
             entry_dict = {
                 "timestamp": e.timestamp,
                 "level": e.level,
@@ -99,6 +102,7 @@ async def lilac_parse_text(
                 "template": e.template.template_str if e.template else None,
                 "template_source": e.template.source if e.template else None,
                 "parameters": e.parameters,
+                "metadata": metadata if metadata else None,
             }
             entries_data.append(entry_dict)
 
