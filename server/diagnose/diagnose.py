@@ -41,13 +41,15 @@ from server.diagnose.knowledge_loader import load_knowledge, get_all_root_causes
 from server.diagnose.file_parser import FileParser, parse_diagnosis_json, get_metrics_from_file
 
 # ==================== 日志配置 ====================
+_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+os.makedirs(_log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] [%(funcName)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('diagnose_local.log', encoding='utf-8')
+        logging.FileHandler(os.path.join(_log_dir, 'diagnose_local.log'), encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
