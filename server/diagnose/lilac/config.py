@@ -61,3 +61,15 @@ class LilacConfig:
             "LILAC_ENABLE_DRAIN3", "true"
         ).lower() in ("true", "1", "yes")
     )
+
+    fuzzy_match_penalty: float = field(
+        default_factory=lambda: float(
+            os.environ.get("LILAC_FUZZY_PENALTY", "0.95")
+        )
+    )
+
+    template_merge_enabled: bool = field(
+        default_factory=lambda: os.environ.get(
+            "LILAC_TEMPLATE_MERGE", "true"
+        ).lower() in ("true", "1", "yes")
+    )

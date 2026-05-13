@@ -19,7 +19,7 @@ class LogTemplate:
     hit_count: int = 0
     created_at: float = field(default_factory=time.time)
     last_hit_at: float = field(default_factory=time.time)
-    source: Literal["llm", "drain3", "seed", "manual"] = "llm"
+    source: Literal["llm", "drain3", "seed", "manual", "static"] = "llm"
 
     @staticmethod
     def generate_id(template_str: str) -> str:
@@ -61,6 +61,8 @@ class ParseResult:
     cache_hits: int = 0
     llm_calls: int = 0
     drain3_fallbacks: int = 0
+    static_shortcuts: int = 0
+    batch_dedup: int = 0
     parse_time_ms: float = 0.0
 
 
