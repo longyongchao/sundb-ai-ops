@@ -1,0 +1,730 @@
+{
+  "info": {
+    "name": "LILAC Log Parser API",
+    "description": "LILAC 日志解析模块 API 测试集合\n\n包含 6 个端点的完整测试用例，覆盖正常流程、边界情况和端到端验证。\n\n使用前请确保服务运行在 {{base_url}} (默认 http://localhost:7861)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:7861",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Cache Stats (初始状态)",
+      "item": [
+        {
+          "name": "GET cache stats - 空缓存",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache/stats",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has correct structure', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql(200);",
+                  "  pm.expect(json.data).to.have.property('total_templates');",
+                  "  pm.expect(json.data).to.have.property('total_hits');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Seed (种子模板生成)",
+      "item": [
+        {
+          "name": "POST seed - 从样本目录生成种子",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample_dir\": \"tests/lilac/sample_logs\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/seed",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "seed"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Seed templates added > 0', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql(200);",
+                  "  pm.expect(json.data.templates_added).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST seed - 不存在的目录",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample_dir\": \"/nonexistent/path\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/seed",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "seed"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('templates_added is 0', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.templates_added).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Parse Text (文本解析)",
+      "item": [
+        {
+          "name": "POST parse_text - 单行日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"2024-01-01 10:00:00 INFO User alice logged in from 192.168.1.1\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Parsed 1 entry', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(1);",
+                  "  pm.expect(json.data.entries[0].timestamp).to.eql('2024-01-01 10:00:00');",
+                  "  pm.expect(json.data.entries[0].level).to.eql('INFO');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse_text - 多行日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"2024-01-01 10:00:00 INFO Request processed in 42ms\\n2024-01-01 10:00:01 ERROR Connection timeout to db-host\\n2024-01-01 10:00:02 WARN Retrying connection attempt 3\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Parsed 3 entries', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(3);",
+                  "});",
+                  "pm.test('Has timing info', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.parse_time_ms).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse_text - SunDB 格式 (多行header+body)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"[2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION]\\nListener port 5236 opened\\n[2024-03-12 15:50:01.789012 INSTANCE(G1N1) THREAD(2586400,281464209690017)] [WARNING]\\nRedo log switch detected, current sequence: 12345\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Parsed 2 merged entries', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(2);",
+                  "});",
+                  "pm.test('SunDB header fields extracted', () => {",
+                  "  const entry = pm.response.json().data.entries[0];",
+                  "  pm.expect(entry.timestamp).to.include('2024-03-12');",
+                  "  pm.expect(entry.level).to.eql('INFORMATION');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse_text - Syslog 格式",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Mar 15 10:23:01 db-server-01 sundb[5432]: LOG: connection received: host=192.168.1.100 port=54321\\nMar 15 10:23:05 db-server-01 sundb[5433]: ERROR: relation \\\"missing_table\\\" does not exist\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Syslog entries parsed', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(2);",
+                  "  pm.expect(json.data.entries[0].timestamp).to.include('Mar 15');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse_text - 空文本",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('No entries from empty text', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse_text - 带 source_file 参数",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"2024-01-01 10:00:00 INFO Server started\",\n  \"source_file\": \"app.log\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Entry parsed successfully', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Parse File (文件上传解析)",
+      "item": [
+        {
+          "name": "POST parse - 上传 SunDB system.trc",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/lilac/sample_logs/system.trc",
+                  "description": "SunDB system.trc 测试文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('File parsed with entries', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql(200);",
+                  "  pm.expect(json.data.total_entries).to.be.above(0);",
+                  "  pm.expect(json.data.filename).to.eql('system.trc');",
+                  "});",
+                  "pm.test('Has metrics fields', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.property('cache_hits');",
+                  "  pm.expect(d).to.have.property('llm_calls');",
+                  "  pm.expect(d).to.have.property('drain3_fallbacks');",
+                  "  pm.expect(d).to.have.property('parse_time_ms');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse - 上传 syslog 文件",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/lilac/sample_logs/syslog_sample.log",
+                  "description": "Syslog 测试文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Syslog file parsed', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.be.above(0);",
+                  "  pm.expect(json.data.filename).to.eql('syslog_sample.log');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST parse - 上传 nginx access.log",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "tests/lilac/sample_logs/nginx_access.log",
+                  "description": "Nginx access log 测试文件"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Nginx file parsed', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.total_entries).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Cache Templates (模板查询)",
+      "item": [
+        {
+          "name": "GET cache templates - 默认参数",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache/templates",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache", "templates"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response structure correct', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d).to.have.property('total');",
+                  "  pm.expect(d).to.have.property('returned');",
+                  "  pm.expect(d).to.have.property('templates');",
+                  "  pm.expect(d.templates).to.be.an('array');",
+                  "});",
+                  "pm.test('Template fields complete', () => {",
+                  "  const templates = pm.response.json().data.templates;",
+                  "  if (templates.length > 0) {",
+                  "    const t = templates[0];",
+                  "    pm.expect(t).to.have.property('template_id');",
+                  "    pm.expect(t).to.have.property('template_str');",
+                  "    pm.expect(t).to.have.property('hit_count');",
+                  "    pm.expect(t).to.have.property('source');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET cache templates - 分页 (limit=2, offset=0)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache/templates?limit=2&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache", "templates"],
+              "query": [
+                {"key": "limit", "value": "2"},
+                {"key": "offset", "value": "0"}
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Pagination works', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.returned).to.be.at.most(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Cache Clear (清空缓存)",
+      "item": [
+        {
+          "name": "DELETE cache - 清空",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cache cleared message', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET cache stats - 确认已清空",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache/stats",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cache is empty after clear', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.total_templates).to.eql(0);",
+                  "  pm.expect(d.total_hits).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. E2E Flow (端到端验证)",
+      "item": [
+        {
+          "name": "Step 1: Clear cache",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cache cleared', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2: Seed templates",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample_dir\": \"tests/lilac/sample_logs\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/seed",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "seed"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Seeded > 0 templates', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.templates_added).to.be.above(0);",
+                  "  pm.environment.set('seeded_count', json.data.templates_added);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3: Parse SunDB text (expect cache hits)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"[2024-03-12 15:49:06.123456 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION]\\nListener port 5236 opened\\n[2024-03-12 15:52:00.111222 INSTANCE(G1N2) THREAD(2586500,281464209690018)] [FATAL]\\nUndo semaphore acquire failed, session 99999\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/parse_text",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All entries hit cache (0 LLM calls)', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.total_entries).to.eql(2);",
+                  "  pm.expect(d.cache_hits).to.eql(2);",
+                  "  pm.expect(d.llm_calls).to.eql(0);",
+                  "});",
+                  "pm.test('Templates matched correctly', () => {",
+                  "  const entries = pm.response.json().data.entries;",
+                  "  pm.expect(entries[0].template).to.include('<*>');",
+                  "  pm.expect(entries[0].template_source).to.eql('seed');",
+                  "  pm.expect(entries[1].template).to.include('Undo semaphore');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 4: Verify hit count increased",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/diagnose/lilac/cache/stats",
+              "host": ["{{base_url}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hit count increased', () => {",
+                  "  const d = pm.response.json().data;",
+                  "  pm.expect(d.total_hits).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
