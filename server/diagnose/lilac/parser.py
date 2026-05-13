@@ -153,16 +153,40 @@ class LilacParser:
         resolved = {}  # tuple(tokens) -> (template, source_str)
 
         resolved_count = 0
+        pass2_cache = 0
+        pass2_llm = 0
+        pass2_static = 0
+        pass2_drain3 = 0
+        pass2_none = 0
+
         for key, rep_idx in groups.items():
             _, _, preprocessed = preprocessed_lines[rep_idx]
             template, source_str = self._resolve_template(preprocessed)
             resolved[key] = (template, source_str)
             resolved_count += 1
 
+            if source_str == "cache":
+                pass2_cache += 1
+            elif source_str == "llm":
+                pass2_llm += 1
+            elif source_str == "static":
+                pass2_static += 1
+            elif source_str == "drain3":
+                pass2_drain3 += 1
+            else:
+                pass2_none += 1
+
             if source_str == "llm":
                 logger.info(
                     f"[LILAC] [{resolved_count}/{unique_groups}] LLM调用 | "
                     f"唯一模式 #{resolved_count}"
+                )
+
+            if resolved_count % 500 == 0:
+                logger.info(
+                    f"[LILAC] 进度 [{resolved_count}/{unique_groups}] | "
+                    f"缓存:{pass2_cache} 静态:{pass2_static} LLM:{pass2_llm} "
+                    f"Drain3:{pass2_drain3} 未匹配:{pass2_none}"
                 )
 
         # === Pass 3: 按原始顺序构建结果 ===
