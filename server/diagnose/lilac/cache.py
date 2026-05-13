@@ -89,7 +89,14 @@ class AdaptiveParsingCache:
         if bucket is None:
             return None
 
-        candidates = bucket.get(first_token, [])
+        # 精确匹配 first_token 的候选
+        candidates = list(bucket.get(first_token, []))
+
+        # 追加 first_token 含 <*> 的通配候选（LLM 模板的 first_token 常含变量占位符）
+        for stored_ft, tpls in bucket.items():
+            if stored_ft != first_token and "<*>" in stored_ft:
+                candidates.extend(tpls)
+
         if not candidates:
             return None
 
