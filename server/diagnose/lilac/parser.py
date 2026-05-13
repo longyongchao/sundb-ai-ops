@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import time
 from typing import List, Optional
 
@@ -85,7 +86,8 @@ class LilacParser:
                     source = "drain3"
                     self._cache.insert(template, preprocessed.masked_body)
 
-        parameters = self._extract_parameters(preprocessed.tokens, template)
+        raw_body_tokens = preprocessed.body.split() if preprocessed.body else preprocessed.raw_text.split()
+        parameters = self._extract_parameters(raw_body_tokens, template)
 
         metadata = dict(preprocessed.header_fields)
         if source:
@@ -178,11 +180,28 @@ class LilacParser:
     def _extract_parameters(
         log_tokens: List[str], template: Optional[LogTemplate]
     ) -> List[str]:
-        """从日志 tokens 和模板 tokens 中提取参数"""
-        if template is None or not template.tokens:
+        """从原始日志文本和模板中提取参数（正则匹配方式）"""
+        if template is None or not template.template_str:
             return []
-        params = []
-        for lt, tt in zip(log_tokens, template.tokens):
-            if tt == "<*>" and lt != "<*>":
-                params.append(lt)
-        return params
+
+        try:
+            raw_text = " ".join(log_tokens)
+            # Convert template to regex: escape literal parts, replace <*> with capture group
+            parts = template.template_str.split("<*>")
+            regex_parts = [re.escape(p) for p in parts]
+            pattern = "(.*?)".join(regex_parts)
+            # Allow flexible whitespace matching
+            pattern = re.sub(r'\\ ', r'\\s+', pattern)
+
+            m = re.fullmatch(pattern, raw_text, re.DOTALL)
+            if m:
+                return [g for g in m.groups() if g]
+
+            # fallback: non-greedy from start
+            m = re.match(pattern, raw_text, re.DOTALL)
+            if m:
+                return [g for g in m.groups() if g]
+        except re.error:
+            pass
+
+        return []
