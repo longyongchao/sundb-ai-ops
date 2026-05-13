@@ -2,6 +2,12 @@
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+_project_root = Path(__file__).resolve().parents[3]
+load_dotenv(_project_root / ".env")
 
 
 @dataclass
