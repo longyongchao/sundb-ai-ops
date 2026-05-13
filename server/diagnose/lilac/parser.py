@@ -110,13 +110,16 @@ class LilacParser:
         start = time.time()
         raw_lines = content.splitlines()
         assembled = self._assemble_multiline(raw_lines)
+        total = len(assembled)
+
+        logger.info(f"[LILAC] 开始解析: {total} 条日志 (source={source_file or 'text'})")
 
         entries: List[GenericLogEntry] = []
         cache_hits = 0
         llm_calls = 0
         drain3_fallbacks = 0
 
-        for line_num, line in assembled:
+        for idx, (line_num, line) in enumerate(assembled, 1):
             entry = self.parse_line(line, source_file=source_file, line_number=line_num)
             entries.append(entry)
 
@@ -125,10 +128,27 @@ class LilacParser:
                 cache_hits += 1
             elif parse_source == "llm":
                 llm_calls += 1
+                logger.info(
+                    f"[LILAC] [{idx}/{total}] LLM调用 #{llm_calls} | "
+                    f"缓存命中: {cache_hits} | line={line_num}"
+                )
             elif parse_source == "drain3":
                 drain3_fallbacks += 1
 
+            if idx % 50 == 0 or idx == total:
+                elapsed = (time.time() - start) * 1000.0
+                logger.info(
+                    f"[LILAC] 进度 {idx}/{total} | "
+                    f"缓存命中: {cache_hits}, LLM: {llm_calls}, Drain3: {drain3_fallbacks} | "
+                    f"耗时: {elapsed:.0f}ms"
+                )
+
         elapsed_ms = (time.time() - start) * 1000.0
+        logger.info(
+            f"[LILAC] 解析完成: {total} 条 | "
+            f"缓存命中: {cache_hits}, LLM: {llm_calls}, Drain3: {drain3_fallbacks} | "
+            f"总耗时: {elapsed_ms:.0f}ms"
+        )
 
         return ParseResult(
             entries=entries,
