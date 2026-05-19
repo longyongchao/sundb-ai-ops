@@ -79,6 +79,10 @@ try:
     )
 except Exception:
     pass
+try:
+    from server.db.models.evolution_model import EvolutionCase, EvolutionFeedback
+except Exception:
+    pass
 Base.metadata.create_all(bind=engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

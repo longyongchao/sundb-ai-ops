@@ -96,6 +96,40 @@ def patch_heavy_imports(tmp_path_factory):
 
     # Optional deps that model workers / knowledge_base / etc. import at top level
     optional_deps = [
+        "langchain",
+        "langchain.agents",
+        "langchain.agents.agent",
+        "langchain.agents.agent_toolkits",
+        "langchain.agents.structured_chat",
+        "langchain.callbacks",
+        "langchain.callbacks.base",
+        "langchain.callbacks.manager",
+        "langchain.chains",
+        "langchain.chains.base",
+        "langchain.chains.llm",
+        "langchain.chat_models",
+        "langchain.document_loaders",
+        "langchain.docstore",
+        "langchain.docstore.document",
+        "langchain.embeddings",
+        "langchain.llms",
+        "langchain.memory",
+        "langchain.memory.chat_memory",
+        "langchain.output_parsers",
+        "langchain.prompts",
+        "langchain.prompts.chat",
+        "langchain.pydantic_v1",
+        "langchain.schema",
+        "langchain.schema.language_model",
+        "langchain.schema.output_parser",
+        "langchain.text_splitter",
+        "langchain.tools",
+        "langchain.tools.arxiv",
+        "langchain.tools.base",
+        "langchain.utilities",
+        "langchain.utilities.bing_search",
+        "langchain.utilities.duckduckgo_search",
+        "langchain.utilities.wolfram_alpha",
         "websockets",
         "chardet",
         "cchardet",
@@ -114,6 +148,12 @@ def patch_heavy_imports(tmp_path_factory):
             if dep == "cachetools":
                 mock_dep.cached = lambda cache, **kw: (lambda f: f)  # passthrough decorator
                 mock_dep.TTLCache = MagicMock
+            if dep == "langchain":
+                mock_dep.verbose = False
+            if dep == "langchain.callbacks.base":
+                mock_dep.BaseCallbackHandler = type("BaseCallbackHandler", (), {})
+            if dep == "langchain.memory.chat_memory":
+                mock_dep.BaseChatMemory = type("BaseChatMemory", (), {"return_messages": False})
             mocked_modules[dep] = mock_dep
 
     # langchain_community submodules that may fail to import (missing deps)
