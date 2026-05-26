@@ -27,6 +27,7 @@ export default defineConfig({
           // 只处理非 API 请求和非静态资源请求
           if (!req.url.startsWith('/api') && 
               !req.url.startsWith('/diagnose') && 
+              !req.url.startsWith('/evolution/') && 
               !req.url.startsWith('/report') && 
               !req.url.startsWith('/knowledge_base') && 
               !req.url.startsWith('/chat') && 
@@ -58,6 +59,11 @@ export default defineConfig({
       },
       // 诊断接口代理
       '/diagnose': {
+        target: 'http://localhost:7861',
+        changeOrigin: true,
+      },
+      // 自进化模块接口代理
+      '/evolution/': {
         target: 'http://localhost:7861',
         changeOrigin: true,
       },

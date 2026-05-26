@@ -92,6 +92,7 @@ def mount_app_routes(app: FastAPI, run_mode: str = None):
     mount_alert_routes(app)
     mount_auth_routes(app)
     mount_diagnose_routes(app)
+    mount_evolution_routes(app)
     mount_anomaly_routes(app)
     mount_config_routes(app)
 
@@ -199,6 +200,29 @@ def mount_diagnose_routes(app: FastAPI):
 
     mount_testcase_routes(app)
     mount_anomaly_detector_routes(app)
+
+
+def mount_evolution_routes(app: FastAPI):
+    """
+    挂载自进化模块 API 路由。
+
+    V0.1 只提供案例池、指标和反馈接口，不改变诊断主流程。
+    """
+    try:
+        from server.evolution.api import (
+            create_evolution_feedback,
+            get_evolution_case,
+            get_evolution_metrics,
+            list_evolution_cases,
+        )
+
+        app.get("/evolution/cases", tags=["Evolution"])(list_evolution_cases)
+        app.get("/evolution/cases/{case_id}", tags=["Evolution"])(get_evolution_case)
+        app.get("/evolution/metrics", tags=["Evolution"])(get_evolution_metrics)
+        app.post("/evolution/feedback", tags=["Evolution"])(create_evolution_feedback)
+        logger.info("Evolution routes mounted")
+    except Exception as e:
+        logger.warning(f"Failed to mount evolution routes: {e}")
 
 
 def mount_testcase_routes(app: FastAPI):

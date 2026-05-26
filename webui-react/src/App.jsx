@@ -9,6 +9,7 @@ import KnowledgeChat from '@/pages/KnowledgeChat'
 import Reports from '@/pages/Reports'
 import Monitoring from '@/pages/Monitoring'
 import Profile from '@/pages/Profile'
+import Evolution from '@/pages/Evolution'
 import Login from '@/pages/Login'
 import { DiagnosisProvider } from '@/context/DiagnosisContext'
 
@@ -66,6 +67,7 @@ function App() {
             <Route path="knowledge-chat" element={<KnowledgeChat />} />
             <Route path="reports" element={<Reports />} />
             <Route path="monitoring" element={<Monitoring />} />
+            <Route path="evolution" element={<Evolution />} />
             <Route path="profile" element={<Profile />} />
           </Route>
         </Routes>

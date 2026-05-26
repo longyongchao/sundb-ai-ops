@@ -416,7 +416,15 @@ export const diagnoseAPI = {
     }
   }
 };
-
+/**
+ * 自进化模块 API
+ */
+export const evolutionAPI = {
+  listCases: (params = {}) => api.get('/evolution/cases', { params }),
+  getCase: (caseId) => api.get(`/evolution/cases/${caseId}`),
+  getMetrics: () => api.get('/evolution/metrics'),
+  createFeedback: (data) => api.post('/evolution/feedback', data),
+};
 
 /**
  * 知识库相关API
