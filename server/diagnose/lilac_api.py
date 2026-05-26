@@ -1,7 +1,8 @@
 """LILAC 日志解析 — REST API
 
-提供 6 个接口:
-  POST   /diagnose/lilac/parse         上传任意日志文件解析
+提供 8 个接口:
+  POST   /diagnose/lilac/parse         上传任意日志文件解析（支持 .csv 自动转换）
+  POST   /diagnose/lilac/parse_csv     上传 CSV 日志文件，返回列推断结果 + 解析结果
   POST   /diagnose/lilac/parse_text    直接提交日志文本解析
   GET    /diagnose/lilac/cache/stats   缓存命中率统计
   GET    /diagnose/lilac/cache/templates 查看已缓存模板
@@ -35,9 +36,13 @@ def _get_parser():
 
 
 async def lilac_parse(
-    file: UploadFile = File(..., description="任意日志文件"),
+    file: UploadFile = File(..., description="任意日志文件（支持 .log/.txt/.csv 等格式）"),
 ) -> BaseResponse:
-    """上传任意日志文件，通过 LILAC 解析"""
+    """上传任意日志文件，通过 LILAC 解析。
+
+    若上传 .csv 文件，会先通过 CsvLogConverter 自动识别列角色并转换为标准 .log 文本，
+    再交给 LILAC 进行模板提取与结构化解析。
+    """
     filename = file.filename or "unknown.log"
     tmp_dir = tempfile.mkdtemp(prefix="lilac_")
     tmp_path = os.path.join(tmp_dir, filename)
@@ -48,7 +53,30 @@ async def lilac_parse(
             f.write(content)
 
         parser = _get_parser()
-        result = parser.parse_file(tmp_path)
+        csv_meta = None
+
+        if filename.lower().endswith(".csv"):
+            from server.diagnose.csv_log_converter import CsvLogConverter
+            converter = CsvLogConverter()
+            conv_result = converter.convert_file(tmp_path, encoding="utf-8")
+            result = parser.parse_content(conv_result.log_text, source_file=filename)
+            csv_meta = {
+                "total_rows": conv_result.total_rows,
+                "converted_rows": conv_result.converted_rows,
+                "schema": {
+                    "timestamp_col": conv_result.schema.timestamp_col,
+                    "level_col": conv_result.schema.level_col,
+                    "message_col": conv_result.schema.message_col,
+                    "extra_cols": conv_result.schema.extra_cols,
+                },
+                "warnings": conv_result.warnings,
+            }
+            logger.info(
+                f"[LILAC] CSV 转换完成: {filename}, "
+                f"rows={conv_result.total_rows}, converted={conv_result.converted_rows}"
+            )
+        else:
+            result = parser.parse_file(tmp_path)
 
         entries_data = []
         for e in result.entries:
@@ -74,11 +102,81 @@ async def lilac_parse(
             "parse_time_ms": result.parse_time_ms,
             "entries": entries_data,
         }
+        if csv_meta is not None:
+            data["csv_conversion"] = csv_meta
         return BaseResponse(code=200, msg="Success", data=data)
 
     except Exception as e:
         logger.exception("lilac_parse failed")
         return BaseResponse(code=500, msg=f"解析失败: {e}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+async def lilac_parse_csv(
+    file: UploadFile = File(..., description="CSV 格式日志文件"),
+) -> BaseResponse:
+    """上传 CSV 日志文件，返回列角色推断结果 + LILAC 结构化解析结果。
+
+    相比 /parse 接口，此接口在响应中额外暴露 CSV 列推断的详细信息，
+    便于调试或确认列映射是否正确。
+    """
+    filename = file.filename or "unknown.csv"
+    tmp_dir = tempfile.mkdtemp(prefix="lilac_csv_")
+    tmp_path = os.path.join(tmp_dir, filename)
+
+    try:
+        content = await file.read()
+        with open(tmp_path, "wb") as f:
+            f.write(content)
+
+        from server.diagnose.csv_log_converter import CsvLogConverter
+        converter = CsvLogConverter()
+        conv_result = converter.convert_file(tmp_path, encoding="utf-8")
+
+        parser = _get_parser()
+        result = parser.parse_content(conv_result.log_text, source_file=filename)
+
+        entries_data = []
+        for e in result.entries:
+            metadata = {k: v for k, v in e.metadata.items() if not k.startswith("_")}
+            entries_data.append({
+                "timestamp": e.timestamp,
+                "level": e.level,
+                "message": e.message,
+                "raw_text": e.raw_text,
+                "template": e.template.template_str if e.template else None,
+                "template_source": e.template.source if e.template else None,
+                "parameters": e.parameters,
+                "metadata": metadata if metadata else None,
+            })
+
+        data = {
+            "filename": filename,
+            "csv_conversion": {
+                "total_rows": conv_result.total_rows,
+                "converted_rows": conv_result.converted_rows,
+                "schema": {
+                    "timestamp_col": conv_result.schema.timestamp_col,
+                    "level_col": conv_result.schema.level_col,
+                    "message_col": conv_result.schema.message_col,
+                    "extra_cols": conv_result.schema.extra_cols,
+                },
+                "warnings": conv_result.warnings,
+                "converted_preview": conv_result.log_text.splitlines()[:5],
+            },
+            "total_entries": len(result.entries),
+            "cache_hits": result.cache_hits,
+            "llm_calls": result.llm_calls,
+            "drain3_fallbacks": result.drain3_fallbacks,
+            "parse_time_ms": result.parse_time_ms,
+            "entries": entries_data,
+        }
+        return BaseResponse(code=200, msg="Success", data=data)
+
+    except Exception as e:
+        logger.exception("lilac_parse_csv failed")
+        return BaseResponse(code=500, msg=f"CSV 解析失败: {e}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

@@ -74,6 +74,10 @@ MASK_PATTERNS = [
     (re.compile(r'(?:/[\w.\-]+){2,}'), PLACEHOLDER),
     # Long numbers (4+ digits)
     (re.compile(r'\b\d{4,}\b'), PLACEHOLDER),
+    # Numeric values in key=value pairs (e.g. exec_time_seconds=32, num_lora=0)
+    # This catches small numbers that the 4+-digit rule misses, preventing the
+    # static shortcut from firing when the log body actually contains variables.
+    (re.compile(r'(?<==)\d+(?:\.\d+)?(?=[\s,\]\)\};]|$)', re.MULTILINE), PLACEHOLDER),
 ]
 
 

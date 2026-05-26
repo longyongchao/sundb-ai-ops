@@ -182,11 +182,12 @@ def mount_diagnose_routes(app: FastAPI):
     # LILAC 通用日志解析接口
     try:
         from server.diagnose.lilac_api import (
-            lilac_parse, lilac_parse_text,
+            lilac_parse, lilac_parse_csv, lilac_parse_text,
             lilac_cache_stats, lilac_cache_templates, lilac_cache_clear,
             lilac_seed,
         )
         app.post("/diagnose/lilac/parse", tags=["LILAC"])(lilac_parse)
+        app.post("/diagnose/lilac/parse_csv", tags=["LILAC"])(lilac_parse_csv)
         app.post("/diagnose/lilac/parse_text", tags=["LILAC"])(lilac_parse_text)
         app.get("/diagnose/lilac/cache/stats", tags=["LILAC"])(lilac_cache_stats)
         app.get("/diagnose/lilac/cache/templates", tags=["LILAC"])(lilac_cache_templates)
