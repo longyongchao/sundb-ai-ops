@@ -80,5 +80,11 @@ streamlit-aggrid>=0.3.4.post3
 httpx[brotli,http2,socks]>=0.25.2
 watchdog>=3.0.0
 
+# environment variables
+python-dotenv>=1.0.0
+
 # index advisor tool
 index-eab==0.1.0
+
+# LILAC log parsing
+drain3>=0.9.11

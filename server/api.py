@@ -179,6 +179,23 @@ def mount_diagnose_routes(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to mount SunDB TRC routes: {e}")
 
+    # LILAC 通用日志解析接口
+    try:
+        from server.diagnose.lilac_api import (
+            lilac_parse, lilac_parse_text,
+            lilac_cache_stats, lilac_cache_templates, lilac_cache_clear,
+            lilac_seed,
+        )
+        app.post("/diagnose/lilac/parse", tags=["LILAC"])(lilac_parse)
+        app.post("/diagnose/lilac/parse_text", tags=["LILAC"])(lilac_parse_text)
+        app.get("/diagnose/lilac/cache/stats", tags=["LILAC"])(lilac_cache_stats)
+        app.get("/diagnose/lilac/cache/templates", tags=["LILAC"])(lilac_cache_templates)
+        app.delete("/diagnose/lilac/cache", tags=["LILAC"])(lilac_cache_clear)
+        app.post("/diagnose/lilac/seed", tags=["LILAC"])(lilac_seed)
+        logger.info("LILAC routes mounted")
+    except Exception as e:
+        logger.warning(f"Failed to mount LILAC routes: {e}")
+
     mount_testcase_routes(app)
     mount_anomaly_detector_routes(app)
 

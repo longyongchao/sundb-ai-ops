@@ -13,6 +13,10 @@ import re
 import asyncio
 import httpx
 import pydantic
+from pathlib import Path as _Path
+from dotenv import load_dotenv as _load_dotenv
+
+_load_dotenv(_Path(__file__).resolve().parents[1] / ".env")
 import logging
 import shutil
 import urllib
@@ -97,6 +101,7 @@ class ListResponse(BaseResponse):
 MY_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MY_API_BASE = os.environ.get("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
 MY_MODEL_NAME = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").split(",")[0].strip()
+MY_LLM_THINKING = os.environ.get("LLM_THINKING_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, streaming: bool = True, callbacks: List[Callable] = [], **kwargs: Any) -> ChatOpenAI:
@@ -110,10 +115,16 @@ def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, 
     @return: ChatOpenAI 实例
     @note 使用 DeepSeek API 作为后端
     """
-    kwargs.pop("proxies", None) 
+    kwargs.pop("proxies", None)
     kwargs.pop("http_client", None)
     kwargs.pop("http_async_client", None)
-    
+
+    model_kwargs = kwargs.pop("model_kwargs", {})
+    if "glm" in MY_MODEL_NAME.lower():
+        thinking_type = "enabled" if MY_LLM_THINKING else "disabled"
+        extra_body = model_kwargs.setdefault("extra_body", {})
+        extra_body.setdefault("thinking", {"type": thinking_type})
+
     return ChatOpenAI(
         streaming=streaming,
         callbacks=callbacks,
@@ -122,6 +133,7 @@ def get_ChatOpenAI(model_name: str, temperature: float, max_tokens: int = None, 
         model_name=MY_MODEL_NAME,
         temperature=temperature,
         max_tokens=max_tokens,
+        model_kwargs=model_kwargs,
         **kwargs
     )
 

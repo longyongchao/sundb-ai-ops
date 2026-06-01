@@ -1133,9 +1133,11 @@ class TreeSearchDiagnosis:
         """初始化日志记录器"""
         self.logger = logging.getLogger("TreeSearchDiagnosis")
         self.logger.setLevel(logging.INFO)
-        
+
         # 创建日志文件处理器
-        log_file = f"tree_search_diagnosis_{get_beijing_now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, f"tree_search_diagnosis_{get_beijing_now().strftime('%Y%m%d_%H%M%S')}.log")
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         
