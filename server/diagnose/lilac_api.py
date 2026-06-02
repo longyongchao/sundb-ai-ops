@@ -116,10 +116,13 @@ async def lilac_parse(
 async def lilac_parse_csv(
     file: UploadFile = File(..., description="CSV 格式日志文件"),
 ) -> BaseResponse:
-    """上传 CSV 日志文件，返回列角色推断结果 + LILAC 结构化解析结果。
+    """上传 CSV 日志文件，返回列角色推断 + LILAC 解析 + 服务端准确率验证。
 
-    相比 /parse 接口，此接口在响应中额外暴露 CSV 列推断的详细信息，
-    便于调试或确认列映射是否正确。
+    响应中包含：
+    - csv_conversion: 列角色推断结果与转换统计
+    - entries: LILAC 结构化解析结果
+    - field_checks: 逐行字段对比结果
+    - accuracy: 聚合准确率指标
     """
     filename = file.filename or "unknown.csv"
     tmp_dir = tempfile.mkdtemp(prefix="lilac_csv_")
@@ -151,19 +154,28 @@ async def lilac_parse_csv(
                 "metadata": metadata if metadata else None,
             })
 
+        schema = conv_result.schema
+        csv_rows = conv_result.csv_rows
+        row_mapping = conv_result.row_mapping
+
+        field_checks, accuracy = _compute_field_checks(
+            csv_rows, row_mapping, entries_data, schema, converter
+        )
+
         data = {
             "filename": filename,
             "csv_conversion": {
                 "total_rows": conv_result.total_rows,
                 "converted_rows": conv_result.converted_rows,
                 "schema": {
-                    "timestamp_col": conv_result.schema.timestamp_col,
-                    "level_col": conv_result.schema.level_col,
-                    "message_col": conv_result.schema.message_col,
-                    "extra_cols": conv_result.schema.extra_cols,
+                    "timestamp_col": schema.timestamp_col,
+                    "level_col": schema.level_col,
+                    "message_col": schema.message_col,
+                    "extra_cols": schema.extra_cols,
                 },
                 "warnings": conv_result.warnings,
                 "converted_preview": conv_result.log_text.splitlines()[:5],
+                "row_mapping": row_mapping,
             },
             "total_entries": len(result.entries),
             "cache_hits": result.cache_hits,
@@ -171,6 +183,9 @@ async def lilac_parse_csv(
             "drain3_fallbacks": result.drain3_fallbacks,
             "parse_time_ms": result.parse_time_ms,
             "entries": entries_data,
+            "csv_rows": csv_rows,
+            "field_checks": field_checks,
+            "accuracy": accuracy,
         }
         return BaseResponse(code=200, msg="Success", data=data)
 
@@ -179,6 +194,195 @@ async def lilac_parse_csv(
         return BaseResponse(code=500, msg=f"CSV 解析失败: {e}")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ------------------------------------------------------------------
+# 服务端字段对比与准确率计算
+# ------------------------------------------------------------------
+
+_LEVEL_NORMALIZE_MAP = {
+    "info": "INFO", "information": "INFO", "notice": "INFO",
+    "normal": "INFO", "healthy": "INFO",
+    "debug": "DEBUG", "trace": "TRACE",
+    "warn": "WARNING", "warning": "WARNING",
+    "timeout": "WARNING", "cancelled": "WARNING",
+    "canceled": "WARNING", "rejected": "WARNING",
+    "abnormal": "WARNING", "unhealthy": "WARNING",
+    "error": "ERROR", "err": "ERROR",
+    "fail": "ERROR", "failed": "ERROR", "failure": "ERROR",
+    "exception": "ERROR",
+    "fatal": "FATAL", "critical": "FATAL",
+    "severe": "FATAL", "alert": "FATAL", "emerg": "FATAL",
+    "succeed": "INFO", "success": "INFO", "ok": "INFO",
+    "pass": "INFO", "passed": "INFO", "done": "INFO",
+    "running": "INFO", "pending": "INFO", "skipped": "INFO",
+}
+
+
+def _normalize_level(raw: str) -> Optional[str]:
+    """与 CsvLogConverter._LEVEL_NORMALIZE 一致的级别映射"""
+    if not raw or not raw.strip():
+        return None
+    return _LEVEL_NORMALIZE_MAP.get(raw.strip().lower(), raw.strip().upper())
+
+
+def _compute_field_checks(csv_rows, row_mapping, entries_data, schema, converter):
+    """逐行对比 CSV 原始值与 LILAC 解析结果，返回 field_checks 和聚合 accuracy"""
+    field_checks = []
+    ts_match = ts_total = 0
+    lv_match = lv_total = 0
+    msg_match = msg_total = 0
+    extra_match = extra_total = 0
+    tpl_placeholder = 0
+    full_row_match = 0
+    checked_rows = 0
+
+    for entry_idx, entry in enumerate(entries_data):
+        if entry_idx >= len(row_mapping):
+            break
+        csv_row_idx = row_mapping[entry_idx]
+        if csv_row_idx >= len(csv_rows):
+            break
+        csv_row = csv_rows[csv_row_idx]
+
+        row_checks = []
+        row_all_match = True
+        has_non_na = False
+
+        msg = entry.get("message") or ""
+
+        # 时间戳
+        if schema.timestamp_col:
+            orig = (csv_row.get(schema.timestamp_col) or "").strip()
+            if orig:
+                expected = converter._normalize_timestamp(orig)
+                parsed = (entry.get("timestamp") or "").strip()
+                matched = (expected == parsed)
+                row_checks.append({
+                    "col": schema.timestamp_col, "role": "timestamp",
+                    "original": orig, "expected": expected, "parsed": parsed,
+                    "match": matched,
+                })
+                ts_total += 1
+                if matched:
+                    ts_match += 1
+                else:
+                    row_all_match = False
+                has_non_na = True
+            else:
+                row_checks.append({
+                    "col": schema.timestamp_col, "role": "timestamp",
+                    "original": "", "expected": "", "parsed": entry.get("timestamp", ""),
+                    "match": None,
+                })
+
+        # 级别
+        if schema.level_col:
+            orig = (csv_row.get(schema.level_col) or "").strip()
+            if orig:
+                expected = _normalize_level(orig)
+                parsed = (entry.get("level") or "").upper()
+                matched = (expected == parsed) if expected else False
+                row_checks.append({
+                    "col": schema.level_col, "role": "level",
+                    "original": orig, "expected": expected, "parsed": parsed,
+                    "match": matched,
+                })
+                lv_total += 1
+                if matched:
+                    lv_match += 1
+                else:
+                    row_all_match = False
+                has_non_na = True
+            else:
+                row_checks.append({
+                    "col": schema.level_col, "role": "level",
+                    "original": "", "expected": "", "parsed": entry.get("level", ""),
+                    "match": None,
+                })
+
+        # 消息列
+        if schema.message_col:
+            orig = (csv_row.get(schema.message_col) or "").strip()
+            if orig:
+                matched = msg.startswith(orig)
+                row_checks.append({
+                    "col": schema.message_col, "role": "message",
+                    "original": orig, "expected": orig,
+                    "parsed": msg[:len(orig) + 30],
+                    "match": matched,
+                })
+                msg_total += 1
+                if matched:
+                    msg_match += 1
+                else:
+                    row_all_match = False
+                has_non_na = True
+            else:
+                row_checks.append({
+                    "col": schema.message_col, "role": "message",
+                    "original": "", "expected": "", "parsed": msg[:50],
+                    "match": None,
+                })
+
+        # 附加列
+        for col in (schema.extra_cols or []):
+            orig = (csv_row.get(col) or "").strip()
+            if orig:
+                expected_kv = f"{col}={orig}"
+                matched = expected_kv in msg
+                row_checks.append({
+                    "col": col, "role": "extra",
+                    "original": orig, "expected": expected_kv,
+                    "parsed": expected_kv if matched else "",
+                    "match": matched,
+                })
+                extra_total += 1
+                if matched:
+                    extra_match += 1
+                else:
+                    row_all_match = False
+                has_non_na = True
+            else:
+                row_checks.append({
+                    "col": col, "role": "extra",
+                    "original": "", "expected": "", "parsed": "",
+                    "match": None,
+                })
+
+        # 模板变量
+        tpl = entry.get("template") or ""
+        if "<*>" in tpl:
+            tpl_placeholder += 1
+
+        if has_non_na and row_all_match:
+            full_row_match += 1
+        checked_rows += 1
+
+        field_checks.append({
+            "csv_row_idx": csv_row_idx,
+            "entry_idx": entry_idx,
+            "checks": row_checks,
+            "all_match": row_all_match if has_non_na else None,
+        })
+
+    def pct(a, b):
+        return round(a / b * 100) if b > 0 else None
+
+    accuracy = {
+        "checked_rows": checked_rows,
+        "full_row_match": full_row_match,
+        "full_pct": pct(full_row_match, checked_rows),
+        "ts_match": ts_match, "ts_total": ts_total, "ts_pct": pct(ts_match, ts_total),
+        "lv_match": lv_match, "lv_total": lv_total, "lv_pct": pct(lv_match, lv_total),
+        "msg_match": msg_match, "msg_total": msg_total, "msg_pct": pct(msg_match, msg_total),
+        "extra_match": extra_match, "extra_total": extra_total, "extra_pct": pct(extra_match, extra_total),
+        "tpl_placeholder": tpl_placeholder, "tpl_pct": pct(tpl_placeholder, checked_rows),
+        "row_alignment": "exact" if len(entries_data) == len(csv_rows) else "partial",
+        "skipped_rows": len(csv_rows) - len(row_mapping),
+    }
+
+    return field_checks, accuracy
 
 
 async def lilac_parse_text(

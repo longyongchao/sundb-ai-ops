@@ -18,21 +18,15 @@ os.environ['NO_PROXY'] = '*'
 for env_key in ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
     os.environ.pop(env_key, None)
 
-import asyncio
-from typing import List, Literal
 from server.utils import (
-    BaseResponse,
-    ListResponse,
     FastAPI,
     MakeFastAPIOffline,
     get_server_configs,
-    get_prompt_template)
+)
 from server.llm_api import (list_running_models, list_config_models,
                             change_llm_model, stop_llm_model,
                             get_model_config, list_search_engines, llm_model)
-from server.embeddings_api import embed_texts_endpoint
 from server.chat.feedback import chat_feedback
-from server.chat.completion import completion
 from server.chat.search_engine_chat import search_engine_chat
 from server.chat.openai_chat import openai_chat
 from server.chat.chat import chat
@@ -71,7 +65,49 @@ def create_app(run_mode: str = None):
         app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"],
                            allow_headers=["*"])
     mount_app_routes(app, run_mode=run_mode)
+    mount_frontend(app)
     return app
+
+
+def mount_frontend(app: FastAPI):
+    """挂载前端静态文件（webui-react 构建产物），支持 SPA 路由回退"""
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+    from starlette.requests import Request
+    from starlette.exceptions import HTTPException
+
+    dist_dir = Path(__file__).resolve().parents[1] / "webui-react" / "dist"
+    if not dist_dir.exists():
+        logger.warning(
+            f"[Frontend] 前端构建目录不存在: {dist_dir}\n"
+            "请先运行 `cd webui-react && npm run build` 生成构建产物。"
+        )
+        return
+
+    # 挂载静态资源目录（/assets, /favicon.svg 等）
+    app.mount("/assets", StaticFiles(directory=str(dist_dir / "assets")), name="assets")
+
+    # SPA 回退：API 路径不由前端兜底，避免真实 404 被 index.html 掩盖
+    api_prefixes = (
+        "/api", "/diagnose", "/evolution", "/report", "/knowledge_base",
+        "/chat", "/llm_model", "/server", "/docs", "/openapi.json", "/assets",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(request: Request, full_path: str):
+        path = request.url.path
+        if path.startswith(api_prefixes):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        # 尝试直接提供 dist 目录中的静态文件（如 favicon.svg）
+        candidate = dist_dir / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        # 所有其他路径（前端路由）返回 index.html
+        return FileResponse(str(dist_dir / "index.html"))
+
+    logger.info(f"[Frontend] 前端静态文件已挂载: {dist_dir}")
 
 
 def mount_app_routes(app: FastAPI, run_mode: str = None):
@@ -206,21 +242,28 @@ def mount_evolution_routes(app: FastAPI):
     """
     挂载自进化模块 API 路由。
 
-    V0.1 只提供案例池、指标和反馈接口，不改变诊断主流程。
+    V0.1: 案例池、指标、反馈接口。
+    V0.2: 模式列表、候选列表、候选生成接口。
     """
     try:
         from server.evolution.api import (
             create_evolution_feedback,
+            generate_evolution_candidates,
             get_evolution_case,
             get_evolution_metrics,
+            list_evolution_candidates,
             list_evolution_cases,
+            list_evolution_patterns,
         )
 
         app.get("/evolution/cases", tags=["Evolution"])(list_evolution_cases)
         app.get("/evolution/cases/{case_id}", tags=["Evolution"])(get_evolution_case)
         app.get("/evolution/metrics", tags=["Evolution"])(get_evolution_metrics)
         app.post("/evolution/feedback", tags=["Evolution"])(create_evolution_feedback)
-        logger.info("Evolution routes mounted")
+        app.get("/evolution/patterns", tags=["Evolution"])(list_evolution_patterns)
+        app.get("/evolution/candidates", tags=["Evolution"])(list_evolution_candidates)
+        app.post("/evolution/candidates/generate", tags=["Evolution"])(generate_evolution_candidates)
+        logger.info("Evolution routes mounted (V0.1 + V0.2)")
     except Exception as e:
         logger.warning(f"Failed to mount evolution routes: {e}")
 
@@ -240,9 +283,9 @@ def mount_testcase_routes(app: FastAPI):
         
         app.get("/api/testcases/list", tags=["Test Cases"])(get_testcase_list)
         app.get("/api/testcases/categories", tags=["Test Cases"])(get_testcase_categories)
+        app.get("/api/testcases/statistics", tags=["Test Cases"])(get_testcase_statistics)
         app.get("/api/testcases/category/{category_id}", tags=["Test Cases"])(get_testcases_by_category)
         app.get("/api/testcases/{case_id}", tags=["Test Cases"])(get_testcase_detail)
-        app.get("/api/testcases/statistics", tags=["Test Cases"])(get_testcase_statistics)
         
         logger.info("Test Cases routes mounted")
     except Exception as e:
@@ -606,7 +649,7 @@ def run_api(host, port, **kwargs):
     @param host: 服务地址
     @param port: 服务端口
     """
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(create_app(), host=host, port=port)
 
 
 if __name__ == "__main__":
@@ -615,6 +658,5 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=7861)
     args = parser.parse_args()
 
-    app = create_app()
     logger.info("API Server Starting")
     run_api(host=args.host, port=args.port)

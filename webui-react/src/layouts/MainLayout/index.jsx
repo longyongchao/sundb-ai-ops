@@ -15,6 +15,7 @@ import {
   DatabaseOutlined,
   ApiOutlined,
   BranchesOutlined,
+  DiffOutlined,
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 import NotificationBell from '../../components/NotificationBell'
@@ -107,6 +108,11 @@ const menuItems = [
     key: '/reports',
     icon: <BarChartOutlined />,
     label: '诊断报告',
+  },
+  {
+    key: '/log-compare',
+    icon: <DiffOutlined />,
+    label: '日志解析',
   },
 ]
 

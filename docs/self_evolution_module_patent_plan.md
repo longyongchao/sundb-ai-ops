@@ -49,20 +49,20 @@ flowchart LR
 
 ## 4. 模块设计
 
-建议新增目录：
+当前已实现目录结构：
 
 ```text
 server/evolution/
-  __init__.py
-  schemas.py
-  collector.py
-  evaluator.py
-  pattern_miner.py
-  candidate_generator.py
-  replay_runner.py
-  gatekeeper.py
-  registry.py
-  api.py
+  __init__.py              ✅ V0.1
+  schemas.py               ✅ V0.1  （EvolutionFeedbackInput）
+  collector.py             ✅ V0.1  （脱敏采集、指纹、资产版本快照）
+  evaluator.py             ✅ V0.1  （五维评分、正/负/不确定标签）
+  pattern_miner.py         ✅ V0.2  （四种规则挖掘）
+  candidate_generator.py   ✅ V0.2  （四种候选生成器）
+  api.py                   ✅ V0.1+V0.2 （7 个路由）
+  replay_runner.py         ⬜ V0.3 待开发
+  gatekeeper.py            ⬜ V0.3 待开发
+  registry.py              ⬜ V0.3 待开发
 ```
 
 ### 4.1 数据采集器 `collector.py`
@@ -205,32 +205,35 @@ outcome_score =
 
 ## 5. 数据库扩展建议
 
-新增 `server/db/models/evolution_model.py`：
+文件：`server/db/models/evolution_model.py`
 
-| 表名 | 作用 | 关键字段 |
-| --- | --- | --- |
-| `evolution_cases` | 标准化诊断案例 | `record_id`, `case_fingerprint`, `input_snapshot`, `trace_snapshot`, `outcome_score`, `label` |
-| `evolution_feedback` | 反馈和修复结果 | `case_id`, `feedback_type`, `score`, `accepted`, `metric_recovery`, `recurrence` |
-| `evolution_patterns` | 挖掘出的模式 | `pattern_type`, `cluster_key`, `evidence_cases`, `confidence`, `status` |
-| `evolution_candidates` | 候选更新 | `candidate_type`, `patch_content`, `risk_level`, `source_pattern_id`, `status` |
-| `evolution_experiments` | 沙盒回放结果 | `candidate_id`, `baseline_metrics`, `candidate_metrics`, `regressions`, `pass_gate` |
-| `evolution_artifacts` | 已发布资产版本 | `artifact_type`, `version`, `content_hash`, `rollback_to`, `active` |
+| 表名 | 状态 | 作用 | 关键字段 |
+| --- | --- | --- | --- |
+| `evolution_cases` | ✅ V0.1 | 标准化诊断案例 | `record_id`, `case_fingerprint`, `input_snapshot`, `trace_snapshot`, `outcome_score`, `label` |
+| `evolution_feedback` | ✅ V0.1 | 反馈和修复结果 | `case_id`, `feedback_type`, `score`, `accepted`, `metric_recovery`, `recurrence` |
+| `evolution_patterns` | ✅ V0.2 | 挖掘出的模式 | `pattern_type`, `cluster_key`, `evidence_case_ids`, `confidence`, `status` |
+| `evolution_candidates` | ✅ V0.2 | 候选更新 | `candidate_type`, `patch_content`, `risk_level`, `source_pattern_id`, `status` |
+| `evolution_experiments` | ⬜ V0.3 | 沙盒回放结果 | `candidate_id`, `baseline_metrics`, `candidate_metrics`, `regressions`, `pass_gate` |
+| `evolution_artifacts` | ⬜ V0.3 | 已发布资产版本 | `artifact_type`, `version`, `content_hash`, `rollback_to`, `active` |
 
 这些表与已有 `diagnosis_records` 通过 `record_id` 关联即可，不需要侵入原有诊断表。
 
 ## 6. API 与前端
 
-后端新增路由，挂载到 `server/api.py`：
+后端路由挂载到 `server/api.py`：
 
-| API | 方法 | 用途 |
-| --- | --- | --- |
-| `/evolution/cases` | GET | 查看自进化案例池 |
-| `/evolution/candidates` | GET | 查看候选更新 |
-| `/evolution/candidates/generate` | POST | 基于指定时间窗口生成候选 |
-| `/evolution/replay/{candidate_id}` | POST | 触发沙盒回放 |
-| `/evolution/promote/{candidate_id}` | POST | 发布候选 |
-| `/evolution/rollback/{artifact_version}` | POST | 回滚资产版本 |
-| `/evolution/metrics` | GET | 查看自进化收益指标 |
+| API | 方法 | 用途 | 状态 |
+| --- | --- | --- | --- |
+| `/evolution/cases` | GET | 查看自进化案例池（支持 label/status/anomaly_type 过滤、分页） | ✅ V0.1 已完成 |
+| `/evolution/cases/{case_id}` | GET | 查看单个案例详情及反馈 | ✅ V0.1 已完成 |
+| `/evolution/metrics` | GET | 查看自进化收益指标（含模式/候选计数） | ✅ V0.1 已完成 |
+| `/evolution/feedback` | POST | 提交用户反馈，触发评分更新 | ✅ V0.1 已完成 |
+| `/evolution/patterns` | GET | 查看挖掘出的模式（支持 pattern_type/status 过滤、分页） | ✅ V0.2 已完成 |
+| `/evolution/candidates` | GET | 查看候选更新（支持 candidate_type/status/risk_level 过滤） | ✅ V0.2 已完成 |
+| `/evolution/candidates/generate` | POST | 触发模式挖掘 + 候选生成，结果持久化 | ✅ V0.2 已完成 |
+| `/evolution/replay/{candidate_id}` | POST | 触发沙盒回放 | ⬜ V0.3 待开发 |
+| `/evolution/promote/{candidate_id}` | POST | 发布候选 | ⬜ V0.3 待开发 |
+| `/evolution/rollback/{artifact_type}/{version}` | POST | 回滚指定类型资产到历史版本 | ⬜ V0.3 待开发 |
 
 前端建议新增 `webui-react/src/pages/Evolution/`：
 
@@ -241,37 +244,27 @@ outcome_score =
 
 ## 7. 阶段实施路线
 
-### 第 1 阶段：MVP 闭环记录，1 到 2 周
+### 第 1 阶段：MVP 闭环记录（**✅ 已完成**）
 
-目标：先把数据闭环跑起来。
+- `schemas.py`, `collector.py`, `evaluator.py`, `api.py` 均已实现。
+- `evolution_cases` 和 `evolution_feedback` 两张表已建立（自动建表）。
+- 诊断完成后记录输入、轨迹、知识命中、结果、资产版本（含文件 SHA-256）。
+- 反馈接口已补充自进化反馈写入，支持 `record_id`/`evolution_case_id`/`accepted` 关联。
+- 前端 Evolution 页面基础版已上线，Swagger 可查看全部 V0.1 接口。
+- 评分器（五维加权评分）已实现并通过 4 个单元测试。
 
-- 新增 `server/evolution/schemas.py`, `collector.py`, `api.py`。
-- 新增 `evolution_cases` 和 `evolution_feedback` 两张表。
-- 在诊断完成后记录输入、轨迹、知识命中、结果、版本。
-- 在反馈接口中补充自进化反馈写入。
-- 前端或 Swagger 可查看案例池。
+验收标准：✅ 全部达成
 
-验收标准：
+### 第 2 阶段：候选知识补丁（**✅ 已完成**）
 
-- 每次 `quick_diagnose` 后可生成一条 `evolution_case`。
-- 用户反馈能与诊断记录正确关联。
-- 不影响原有诊断 API。
+- `pattern_miner.py` 实现四种规则挖掘（missing_knowledge / wrong_tool_selection / low_confidence_prompt / retrieval_weight_issue），零外部依赖。
+- `candidate_generator.py` 实现四种候选生成器（knowledge_patch / tool_strategy_patch / prompt_patch / retrieval_strategy_patch），装饰器注册机制便于扩展。
+- 新增 `evolution_patterns` 和 `evolution_candidates` 两张数据表。
+- `POST /evolution/candidates/generate?min_cases=N` 一键触发完整挖掘 + 生成流程。
+- 所有候选默认 `status="pending"`，不影响线上诊断。
+- 18 个模式挖掘测试 + 10 个候选生成测试全部通过（累计 41 个测试）。
 
-### 第 2 阶段：候选知识补丁，2 到 4 周
-
-目标：让系统能从失败案例中生成可审查的知识补丁。
-
-- 实现 `evaluator.py` 和 `pattern_miner.py`。
-- 支持按异常类型聚类低分案例。
-- 实现知识补丁候选生成，不自动发布。
-- 支持将候选补丁导入临时知识库版本。
-- 对 `diagnostic_test_cases/` 做离线回放。
-
-验收标准：
-
-- 系统能生成带证据的知识补丁。
-- 人工批准后可进入知识库版本。
-- 回放报告能显示候选前后的准确率和耗时变化。
+验收标准：✅ 全部达成
 
 ### 第 3 阶段：策略自进化，4 到 8 周
 
@@ -358,27 +351,48 @@ outcome_score =
 | 已有公开技术影响专利新颖性 | 可能影响授权 | 申请前做现有技术检索，聚焦新增闭环机制 |
 | 自动执行优化 SQL 风险高 | 可能影响数据库稳定性 | 第一阶段只建议不执行，高风险动作人工审批 |
 
-## 11. 推荐的最小代码落地清单
+## 11. 代码落地清单（当前状态）
 
-第一批代码建议只做闭环骨架：
+**V0.1 已完成：**
 
 ```text
+server/evolution/__init__.py
 server/evolution/schemas.py
 server/evolution/collector.py
 server/evolution/evaluator.py
-server/evolution/api.py
-server/db/models/evolution_model.py
-server/db/repository/evolution_repository.py
+server/evolution/api.py                        （V0.1+V0.2 共 7 个路由）
+server/db/models/evolution_model.py            （EvolutionCase/Feedback/Pattern/Candidate）
+server/db/repository/evolution_repository.py   （18 个仓储函数）
 tests/unit/test_evolution_collector.py
 tests/unit/test_evolution_evaluator.py
+tests/unit/test_evolution_api.py
 ```
 
-第一批改造点：
+改造点：
 
-- `server/diagnose/diagnose.py`：诊断完成后调用采集器。
-- `server/chat/feedback.py`：反馈写入自进化反馈表。
-- `server/api.py`：挂载 `/evolution/*` 路由。
-- `webui-react`：后续新增 Evolution 页面。
+- `server/diagnose/diagnose.py`：✅ 诊断完成后调用采集器（try/except 旁路）。
+- `server/chat/feedback.py`：✅ 反馈写入自进化反馈表。
+- `server/api.py`：✅ 挂载 `/evolution/*` 7 个路由。
+- `webui-react/src/pages/Evolution/`：✅ 基础页面已上线。
+
+**V0.2 已完成：**
+
+```text
+server/evolution/pattern_miner.py              （四种规则挖掘）
+server/evolution/candidate_generator.py        （四种候选生成器）
+tests/unit/test_evolution_pattern_miner.py     （18 个测试）
+tests/unit/test_evolution_candidate_generator.py （10 个测试）
+```
+
+**V0.3 待开发：**
+
+```text
+server/evolution/replay_runner.py
+server/evolution/gatekeeper.py
+server/evolution/registry.py
+server/db/models/evolution_model.py            （追加 EvolutionExperiment/EvolutionArtifact）
+tests/unit/test_evolution_gatekeeper.py
+```
 
 ## 12. 建议的专利材料包
 

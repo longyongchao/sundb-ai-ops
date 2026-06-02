@@ -1,0 +1,750 @@
+import React, { useState, useCallback, useMemo } from 'react'
+import {
+  Card, Button, Upload, Table, Tag, Tooltip, Row, Col,
+  Statistic, Alert, Space, Typography, Divider, Empty,
+  Progress, message as antMessage,
+} from 'antd'
+import {
+  InboxOutlined, FileTextOutlined,
+  CheckCircleOutlined, WarningOutlined, CloseCircleOutlined,
+  ClockCircleOutlined, ThunderboltOutlined, DatabaseOutlined,
+  ReloadOutlined, TableOutlined, BarChartOutlined,
+  CheckOutlined, CloseOutlined, PlayCircleOutlined,
+} from '@ant-design/icons'
+import { lilacAPI } from '@/utils/api'
+import './index.scss'
+
+const { Dragger } = Upload
+const { Text, Title } = Typography
+
+// ── 内置示例数据 ──────────────────────────────────────────────────────
+const DEMO_CSV_ROWS = [
+  { gmt_create: '2024/11/15 16:57', predict_type: 'TXT_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '32',  groupId: 'G0000', prompt_length: '63',  negative_prompt_length: '26', num_images_per_prompt: '1', num_inference_steps: '30', checkpoint_model_version_id: 'M0000', num_lora: '0' },
+  { gmt_create: '2024/11/15 18:16', predict_type: 'TXT_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '43',  groupId: 'G0001', prompt_length: '93',  negative_prompt_length: '',   num_images_per_prompt: '1', num_inference_steps: '40', checkpoint_model_version_id: 'M0001', num_lora: '0' },
+  { gmt_create: '2024/11/17 4:44',  predict_type: 'TXT_2_IMG', predict_status: 'FAILED',  exec_time_seconds: '0',   groupId: 'G0001', prompt_length: '93',  negative_prompt_length: '',   num_images_per_prompt: '1', num_inference_steps: '40', checkpoint_model_version_id: 'M0001', num_lora: '0' },
+  { gmt_create: '2024/11/18 9:05',  predict_type: 'IMG_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '18',  groupId: 'G0002', prompt_length: '45',  negative_prompt_length: '12', num_images_per_prompt: '2', num_inference_steps: '20', checkpoint_model_version_id: 'M0002', num_lora: '1' },
+  { gmt_create: '2024/11/18 11:30', predict_type: 'TXT_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '55',  groupId: 'G0003', prompt_length: '120', negative_prompt_length: '30', num_images_per_prompt: '1', num_inference_steps: '50', checkpoint_model_version_id: 'M0000', num_lora: '2' },
+  { gmt_create: '2024/11/19 2:15',  predict_type: 'IMG_2_IMG', predict_status: 'FAILED',  exec_time_seconds: '0',   groupId: 'G0002', prompt_length: '45',  negative_prompt_length: '12', num_images_per_prompt: '1', num_inference_steps: '20', checkpoint_model_version_id: 'M0003', num_lora: '0' },
+  { gmt_create: '2024/11/19 14:22', predict_type: 'TXT_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '38',  groupId: 'G0004', prompt_length: '77',  negative_prompt_length: '18', num_images_per_prompt: '1', num_inference_steps: '30', checkpoint_model_version_id: 'M0001', num_lora: '1' },
+  { gmt_create: '2024/11/20 8:00',  predict_type: 'TXT_2_IMG', predict_status: 'SUCCEED', exec_time_seconds: '29',  groupId: 'G0000', prompt_length: '50',  negative_prompt_length: '0',  num_images_per_prompt: '4', num_inference_steps: '25', checkpoint_model_version_id: 'M0000', num_lora: '0' },
+]
+const DEMO_SCHEMA = {
+  timestamp_col: 'gmt_create', level_col: 'predict_status', message_col: 'predict_type',
+  extra_cols: ['exec_time_seconds','groupId','prompt_length','negative_prompt_length','num_images_per_prompt','num_inference_steps','checkpoint_model_version_id','num_lora'],
+}
+const _TPL = 'TXT_2_IMG [predict_status=<*> exec_time_seconds=<*> groupId=<*> prompt_length=<*> negative_prompt_length=<*> num_images_per_prompt=<*> num_inference_steps=<*> checkpoint_model_version_id=<*> num_lora=<*>]'
+const _ITPL = 'IMG_2_IMG [predict_status=<*> exec_time_seconds=<*> groupId=<*> prompt_length=<*> negative_prompt_length=<*> num_images_per_prompt=<*> num_inference_steps=<*> checkpoint_model_version_id=<*> num_lora=<*>]'
+const DEMO_ENTRIES = [
+  { timestamp: '2024-11-15 16:57:00', level: 'INFO',  message: 'TXT_2_IMG [predict_status=SUCCEED exec_time_seconds=32 groupId=G0000 prompt_length=63 negative_prompt_length=26 num_images_per_prompt=1 num_inference_steps=30 checkpoint_model_version_id=M0000 num_lora=0]',  template: _TPL,  template_source: 'llm'   },
+  { timestamp: '2024-11-15 18:16:00', level: 'INFO',  message: 'TXT_2_IMG [predict_status=SUCCEED exec_time_seconds=43 groupId=G0001 prompt_length=93 num_images_per_prompt=1 num_inference_steps=40 checkpoint_model_version_id=M0001 num_lora=0]',                           template: _TPL,  template_source: 'cache' },
+  { timestamp: '2024-11-17 04:44:00', level: 'ERROR', message: 'TXT_2_IMG [predict_status=FAILED exec_time_seconds=0 groupId=G0001 prompt_length=93 num_images_per_prompt=1 num_inference_steps=40 checkpoint_model_version_id=M0001 num_lora=0]',                            template: _TPL,  template_source: 'cache' },
+  { timestamp: '2024-11-18 09:05:00', level: 'INFO',  message: 'IMG_2_IMG [predict_status=SUCCEED exec_time_seconds=18 groupId=G0002 prompt_length=45 negative_prompt_length=12 num_images_per_prompt=2 num_inference_steps=20 checkpoint_model_version_id=M0002 num_lora=1]', template: _ITPL, template_source: 'cache' },
+  { timestamp: '2024-11-18 11:30:00', level: 'INFO',  message: 'TXT_2_IMG [predict_status=SUCCEED exec_time_seconds=55 groupId=G0003 prompt_length=120 negative_prompt_length=30 num_images_per_prompt=1 num_inference_steps=50 checkpoint_model_version_id=M0000 num_lora=2]',template: _TPL,  template_source: 'cache' },
+  { timestamp: '2024-11-19 02:15:00', level: 'ERROR', message: 'IMG_2_IMG [predict_status=FAILED exec_time_seconds=0 groupId=G0002 prompt_length=45 negative_prompt_length=12 num_images_per_prompt=1 num_inference_steps=20 checkpoint_model_version_id=M0003 num_lora=0]',  template: _ITPL, template_source: 'cache' },
+  { timestamp: '2024-11-19 14:22:00', level: 'INFO',  message: 'TXT_2_IMG [predict_status=SUCCEED exec_time_seconds=38 groupId=G0004 prompt_length=77 negative_prompt_length=18 num_images_per_prompt=1 num_inference_steps=30 checkpoint_model_version_id=M0001 num_lora=1]', template: _TPL,  template_source: 'cache' },
+  { timestamp: '2024-11-20 08:00:00', level: 'INFO',  message: 'TXT_2_IMG [predict_status=SUCCEED exec_time_seconds=29 groupId=G0000 prompt_length=50 negative_prompt_length=0 num_images_per_prompt=4 num_inference_steps=25 checkpoint_model_version_id=M0000 num_lora=0]',   template: _TPL,  template_source: 'cache' },
+]
+const DEMO_FIELD_CHECKS = DEMO_CSV_ROWS.map((row, idx) => ({
+  csv_row_idx: idx, entry_idx: idx, all_match: true,
+  checks: [
+    { col: 'gmt_create', role: 'timestamp', original: row.gmt_create, expected: DEMO_ENTRIES[idx].timestamp, parsed: DEMO_ENTRIES[idx].timestamp, match: true },
+    { col: 'predict_status', role: 'level', original: row.predict_status, expected: DEMO_ENTRIES[idx].level, parsed: DEMO_ENTRIES[idx].level, match: true },
+    { col: 'predict_type', role: 'message', original: row.predict_type, expected: row.predict_type, parsed: DEMO_ENTRIES[idx].message.slice(0, 30), match: true },
+  ],
+}))
+const DEMO_ACCURACY = {
+  checked_rows: 8, full_row_match: 8, full_pct: 100,
+  ts_match: 8, ts_total: 8, ts_pct: 100,
+  lv_match: 8, lv_total: 8, lv_pct: 100,
+  msg_match: 8, msg_total: 8, msg_pct: 100,
+  extra_match: 56, extra_total: 56, extra_pct: 100,
+  tpl_placeholder: 8, tpl_pct: 100,
+  row_alignment: 'exact', skipped_rows: 0,
+}
+const DEMO_PARSE_RESULT = {
+  filename: 'lora_request_trace.csv（示例）',
+  csv_conversion: { total_rows: 8, converted_rows: 8, schema: DEMO_SCHEMA, warnings: [], row_mapping: [0,1,2,3,4,5,6,7] },
+  total_entries: 8, cache_hits: 7, llm_calls: 1, drain3_fallbacks: 0, parse_time_ms: 1243,
+  entries: DEMO_ENTRIES,
+  csv_rows: DEMO_CSV_ROWS,
+  field_checks: DEMO_FIELD_CHECKS,
+  accuracy: DEMO_ACCURACY,
+}
+
+// 支持 LILAC 可解析的日志格式（与后端 /diagnose/lilac/parse 一致）
+const ACCEPTED_EXTENSIONS = ['.csv', '.log', '.txt', '.trc', '.out', '.trace']
+const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(',')
+
+function isCsvFile(name) {
+  return /\.csv$/i.test(name || '')
+}
+
+function isAcceptedLogFile(name) {
+  const lower = (name || '').toLowerCase()
+  if (!lower.includes('.')) return true
+  return ACCEPTED_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+function computeTemplateStats(entries) {
+  const sources = {}
+  let withPlaceholder = 0
+  for (const e of entries) {
+    const src = e.template_source || 'unknown'
+    sources[src] = (sources[src] || 0) + 1
+    if (e.template?.includes('<*>')) withPlaceholder++
+  }
+  return { sources, withPlaceholder, total: entries.length }
+}
+
+// ── CSV 解析 ──────────────────────────────────────────────────────────
+function parseCSVLine(line) {
+  const result = []; let cur = ''; let inQ = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++ } else inQ = !inQ }
+    else if (c === ',' && !inQ) { result.push(cur); cur = '' }
+    else cur += c
+  }
+  result.push(cur); return result
+}
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/)
+  if (!lines.length) return { headers: [], rows: [] }
+  const headers = parseCSVLine(lines[0]); const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue
+    const vals = parseCSVLine(lines[i]); const row = {}
+    headers.forEach((h, idx) => { row[h] = vals[idx] ?? '' })
+    rows.push(row)
+  }
+  return { headers, rows }
+}
+
+// ── 后端 field_checks 适配（服务端统一计算准确率，前端仅展示） ──────────
+// 将后端 field_checks[i].checks 转为前端 FieldDetailTable 需要的格式
+function adaptBackendChecks(backendChecks) {
+  if (!backendChecks) return []
+  return backendChecks.map(c => ({
+    col: c.col,
+    role: c.role,
+    originalVal: c.original || '',
+    expectedVal: c.expected || '',
+    parsedVal: c.parsed || '',
+    match: c.match,
+    na: c.match === null,
+    hint: c.match === null ? '原始值为空，跳过'
+      : c.match ? '匹配成功'
+      : `期望: ${c.expected}，实际: ${c.parsed}`,
+  }))
+}
+
+// ── UI 工具 ───────────────────────────────────────────────────────────
+function getTemplateSourceTag(src) {
+  const map = { llm:{color:'#1677ff',label:'LLM'}, cache:{color:'#52c41a',label:'缓存'},
+    drain3:{color:'#fa8c16',label:'Drain3'}, static:{color:'#8c8c8c',label:'静态'} }
+  const cfg = map[src] || { color:'#595959', label: src||'-' }
+  return <Tag style={{ fontSize:11, padding:'0 5px', marginRight:0 }} color={cfg.color}>{cfg.label}</Tag>
+}
+function getLevelColor(level) {
+  const map = { ERROR:'red',FATAL:'volcano',WARNING:'orange',INFO:'cyan',DEBUG:'geekblue',TRACE:'purple' }
+  return map[(level||'').toUpperCase()] || 'default'
+}
+const ROLE_CFG = { timestamp:{color:'#13c2c2',label:'时间戳'}, level:{color:'#722ed1',label:'级别'},
+  message:{color:'#1677ff',label:'消息'}, extra:{color:'#595959',label:'附加'} }
+function RoleBadge({ role }) {
+  const cfg = ROLE_CFG[role]; if (!cfg) return null
+  return <span style={{ fontSize:10, padding:'1px 5px', borderRadius:3,
+    background:cfg.color+'33', color:cfg.color, border:`1px solid ${cfg.color}66`, marginLeft:4 }}>{cfg.label}</span>
+}
+
+// ── 行展开：字段详情表 ────────────────────────────────────────────────
+function FieldDetailTable({ checks }) {
+  const cols = [
+    { title: '列名', dataIndex: 'col', key: 'col', width: 200,
+      render: (v, r) => <span><code style={{color:'#e2b96c'}}>{v}</code><RoleBadge role={r.role} /></span> },
+    { title: '原始值', dataIndex: 'originalVal', key: 'orig', width: 160,
+      render: v => <code className="field-val">{v || <span className="empty-cell">（空）</span>}</code> },
+    { title: '期望（解析后）', dataIndex: 'expectedVal', key: 'exp', width: 220,
+      render: v => <code className="field-val expected-val">{v}</code> },
+    { title: '实际解析值', dataIndex: 'parsedVal', key: 'parsed', ellipsis: true,
+      render: v => <code className="field-val">{v || <span className="empty-cell">—</span>}</code> },
+    { title: '匹配', key: 'match', width: 80, align: 'center',
+      render: (_, r) => {
+        if (r.na) return <Tag style={{fontSize:11}}>跳过</Tag>
+        return r.match
+          ? <CheckCircleOutlined style={{color:'#52c41a', fontSize:16}} />
+          : <CloseCircleOutlined style={{color:'#ff4d4f', fontSize:16}} />
+      }},
+  ]
+  return (
+    <Table
+      className="field-detail-table"
+      dataSource={checks.map((c,i) => ({...c, key:i}))}
+      columns={cols} pagination={false} size="small" bordered={false}
+    />
+  )
+}
+
+// ── 转换保真度面板（使用后端统一计算的 accuracy） ─────────────────────
+function AccuracyPanel({ accuracy, schema }) {
+  if (!accuracy) return null
+  const getStatus = p => p === null ? null : p >= 95 ? 'good' : p >= 80 ? 'warn' : 'bad'
+  const statusStyle = { good:{color:'#52c41a',label:'优秀'}, warn:{color:'#faad14',label:'良好'}, bad:{color:'#ff4d4f',label:'需关注'} }
+  const items = [
+    { label:'全字段保真率', pct:accuracy.full_pct, desc:`${accuracy.full_row_match}/${accuracy.checked_rows} 行全部字段一致`,
+      stroke:'#00d4ff', tip:'所有列（时间戳+级别+消息+附加）全部正确对应的行占比，综合指标' },
+    { label:'时间戳还原', pct:accuracy.ts_pct, desc:`${accuracy.ts_match}/${accuracy.ts_total} 行匹配`,
+      stroke:'#13c2c2', tip:`${schema?.timestamp_col} 列经服务端规范化后与 LILAC 提取值逐字符比对` },
+    { label:'级别映射', pct:accuracy.lv_pct, desc:`${accuracy.lv_match}/${accuracy.lv_total} 行正确`,
+      stroke:'#722ed1', tip:`${schema?.level_col} 列映射为标准级别后与解析结果比对` },
+    { label:'消息列还原', pct:accuracy.msg_pct, desc:`${accuracy.msg_match}/${accuracy.msg_total} 行对应`,
+      stroke:'#1677ff', tip:`${schema?.message_col} 列原始值应出现在解析后消息体开头` },
+    { label:'附加列保真', pct:accuracy.extra_pct, desc:`${accuracy.extra_match}/${accuracy.extra_total} 个字段值匹配`,
+      stroke:'#fa8c16', tip:'每个附加列的 key=原始值 应出现在解析后的消息体中' },
+    { label:'变量模板覆盖率', pct:accuracy.tpl_pct, desc:`${accuracy.tpl_placeholder}/${accuracy.checked_rows} 行含 <*>`,
+      stroke:'#eb2f96', tip:'模板含 <*> 占位符表示成功提取了变量部分（非固定文本）' },
+  ]
+  return (
+    <Card className="accuracy-card" title={<Space><BarChartOutlined />转换保真度验证（服务端统一计算）</Space>}>
+      {accuracy.row_alignment !== 'exact' && (
+        <Alert type="warning" style={{marginBottom:12}} showIcon
+          message={`行对齐模式：${accuracy.row_alignment}（${accuracy.skipped_rows} 行被跳过转换），验证基于已成功转换的 ${accuracy.checked_rows} 行`} />
+      )}
+      <Row gutter={[20, 16]}>
+        {items.map(item => {
+          const st = getStatus(item.pct)
+          const sc = st ? statusStyle[st] : null
+          return (
+            <Col span={4} key={item.label}>
+              <Tooltip title={item.tip} placement="top">
+                <div className="accuracy-item">
+                  <Text style={{ fontSize:12, color:'rgba(255,255,255,0.65)', cursor:'help' }}>{item.label}</Text>
+                  {item.pct !== null ? (
+                    <>
+                      <div style={{ display:'flex', alignItems:'baseline', gap:6, margin:'6px 0 3px' }}>
+                        <span style={{ fontSize:26, fontWeight:700, color: sc?.color || '#888' }}>{item.pct}%</span>
+                        {sc && <Tag color={sc.color} style={{fontSize:11}}>{sc.label}</Tag>}
+                      </div>
+                      <Progress percent={item.pct} showInfo={false} strokeColor={item.stroke}
+                        trailColor="rgba(255,255,255,0.08)" size="small" />
+                      <Text type="secondary" style={{fontSize:11}}>{item.desc}</Text>
+                    </>
+                  ) : (
+                    <div style={{ color:'rgba(255,255,255,0.25)', fontSize:12, marginTop:8 }}>未检测到对应列</div>
+                  )}
+                </div>
+              </Tooltip>
+            </Col>
+          )
+        })}
+      </Row>
+    </Card>
+  )
+}
+
+// ── 日志条目详情（非 CSV 模式展开） ───────────────────────────────────
+function EntryDetailTable({ entry }) {
+  if (!entry) return null
+  return (
+    <div className="entry-detail">
+      {entry.parameters?.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>提取参数</Text>
+          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.parameters, null, 2)}</pre>
+        </div>
+      )}
+      {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>元数据</Text>
+          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.metadata, null, 2)}</pre>
+        </div>
+      )}
+      <div>
+        <Text type="secondary" style={{ fontSize: 11 }}>原始文本</Text>
+        <pre className="field-val entry-detail-pre">{entry.raw_text || '—'}</pre>
+      </div>
+    </div>
+  )
+}
+
+// ── 模板来源统计（非 CSV 模式） ───────────────────────────────────────
+function TemplateStatsPanel({ entries }) {
+  const stats = useMemo(() => computeTemplateStats(entries), [entries])
+  if (!stats.total) return null
+  const sourceLabels = { llm: 'LLM', cache: '缓存', drain3: 'Drain3', static: '静态', seed: '种子' }
+  return (
+    <Card className="schema-card" title="模板提取统计">
+      <Space wrap size={[8, 8]}>
+        <Text type="secondary">共 {stats.total} 条</Text>
+        <Divider type="vertical" />
+        {Object.entries(stats.sources).map(([src, cnt]) => (
+          <span key={src}>{getTemplateSourceTag(src)} <Text>{sourceLabels[src] || src} × {cnt}</Text></span>
+        ))}
+        <Divider type="vertical" />
+        <Text type="secondary">含变量模板：</Text>
+        <Tag color={stats.withPlaceholder > 0 ? 'green' : 'default'}>
+          {stats.withPlaceholder}/{stats.total}
+        </Tag>
+      </Space>
+    </Card>
+  )
+}
+
+// ── 主组件 ────────────────────────────────────────────────────────────
+const LogCompare = () => {
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [fileMode, setFileMode] = useState(null) // 'csv' | 'log'
+  const [csvData, setCsvData] = useState(null)
+  const [rawPreview, setRawPreview] = useState(null) // { lineCount, sampleLines }
+  const [parseResult, setParseResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+
+  const handleFileSelect = useCallback((file) => {
+    if (!isAcceptedLogFile(file.name)) {
+      antMessage.warning(`不支持的文件类型，请上传 ${ACCEPTED_EXTENSIONS.join(' / ')} 等日志文件`)
+      return false
+    }
+    const mode = isCsvFile(file.name) ? 'csv' : 'log'
+    setSelectedFile(file)
+    setFileMode(mode)
+    setParseResult(null)
+    setError(null)
+    setPage(1)
+    setCsvData(null)
+    setRawPreview(null)
+
+    const reader = new FileReader()
+    reader.onload = e => {
+      const text = e.target.result
+      if (mode === 'csv') {
+        const parsed = parseCSV(text)
+        setCsvData(parsed)
+        antMessage.success(`已读取 ${parsed.rows.length} 行，${parsed.headers.length} 列`)
+      } else {
+        const lines = text.split(/\r?\n/).filter(l => l.trim())
+        setRawPreview({ lineCount: lines.length, sampleLines: lines.slice(0, 8) })
+        antMessage.success(`已读取 ${lines.length} 行日志`)
+      }
+    }
+    reader.onerror = () => antMessage.error('文件读取失败')
+    reader.readAsText(file, 'utf-8')
+    return false
+  }, [])
+
+  const handleParse = async () => {
+    if (!selectedFile) { antMessage.warning('请先选择日志文件'); return }
+    setLoading(true); setError(null)
+    try {
+      const data = fileMode === 'csv'
+        ? await lilacAPI.parseCsv(selectedFile)
+        : await lilacAPI.parseFile(selectedFile)
+      setParseResult(data); setPage(1)
+      antMessage.success(`解析完成，共 ${data.total_entries} 条`)
+    } catch (err) { setError(err?.message || '解析失败') }
+    finally { setLoading(false) }
+  }
+
+  const handleReset = () => {
+    setSelectedFile(null); setFileMode(null); setCsvData(null); setRawPreview(null)
+    setParseResult(null); setError(null); setPage(1)
+  }
+
+  const handleLoadDemo = () => {
+    setFileMode('csv')
+    setCsvData({ headers: Object.keys(DEMO_CSV_ROWS[0]), rows: DEMO_CSV_ROWS })
+    setRawPreview(null)
+    setParseResult(DEMO_PARSE_RESULT)
+    setSelectedFile({ name: 'lora_request_trace.csv（示例）', size: 0 })
+    setError(null); setPage(1)
+    antMessage.success('示例数据已加载，共 8 行')
+  }
+
+  const schema  = parseResult?.csv_conversion?.schema
+  const entries = parseResult?.entries || []
+
+  // 准确率（直接使用后端统一计算的结果）
+  const accuracy = parseResult?.accuracy || null
+  const backendFieldChecks = parseResult?.field_checks || []
+  const backendCsvRows = parseResult?.csv_rows || null
+  const rowMapping = parseResult?.csv_conversion?.row_mapping || null
+
+  // 合并数据（使用后端返回的 csv_rows + field_checks，避免前后端不一致）
+  const mergedData = useMemo(() => {
+    const rows = backendCsvRows || (csvData ? csvData.rows : null)
+    if (!rows) return []
+    return rows.map((csvRow, idx) => {
+      const fc = backendFieldChecks.find(f => f.csv_row_idx === idx)
+      const entry = fc ? entries[fc.entry_idx] : null
+      const fieldChecks = fc ? adaptBackendChecks(fc.checks) : []
+      const failedChecks = fieldChecks.filter(c => c.match === false)
+      const naChecks = fieldChecks.filter(c => c.na)
+      const quality = !fc ? 'skipped'
+        : !entry ? 'bad'
+        : failedChecks.length > 0 ? 'warn'
+        : 'good'
+      return { key: idx, rowIndex: idx + 1, csvRow, entry, fieldChecks, failedChecks, naChecks, quality }
+    })
+  }, [backendCsvRows, csvData, backendFieldChecks, entries])
+
+  const pagedData = mergedData.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE)
+
+  // 表格列
+  const columns = useMemo(() => {
+    if (!csvData) return []
+    const roleOf = col => {
+      if (!schema) return null
+      if (col === schema.timestamp_col) return 'timestamp'
+      if (col === schema.level_col) return 'level'
+      if (col === schema.message_col) return 'message'
+      return 'extra'
+    }
+    const csvCols = csvData.headers.map(col => ({
+      title: <span>{col}{schema && <RoleBadge role={roleOf(col)} />}</span>,
+      dataIndex: ['csvRow', col], key: `csv_${col}`, ellipsis: true, width: 130,
+      render: val => (
+        <Tooltip title={val} placement="topLeft">
+          <span className="cell-text">{val || <span className="empty-cell">—</span>}</span>
+        </Tooltip>
+      ),
+    }))
+    const parsedCols = parseResult ? [
+      { title:'时间戳', key:'p_ts', width:165,
+        render: (_,rec) => {
+          const c = rec.fieldChecks.find(f => f.role==='timestamp')
+          const val = rec.entry?.timestamp
+          if (!val) return <span className="empty-cell">—</span>
+          return <span style={{display:'flex',alignItems:'center',gap:4}}>
+            {c && c.match !== null && (c.match ? <CheckOutlined style={{color:'#52c41a',fontSize:11}}/> : <CloseOutlined style={{color:'#ff4d4f',fontSize:11}}/>)}
+            <span className="parsed-ts">{val}</span>
+          </span>
+        }},
+      { title:'级别', key:'p_lv', width:90,
+        render: (_,rec) => {
+          const c = rec.fieldChecks.find(f => f.role==='level')
+          const val = rec.entry?.level
+          if (!val) return <span className="empty-cell">—</span>
+          return <span style={{display:'flex',alignItems:'center',gap:4}}>
+            {c && c.match !== null && (c.match ? <CheckOutlined style={{color:'#52c41a',fontSize:11}}/> : <CloseOutlined style={{color:'#ff4d4f',fontSize:11}}/>)}
+            <Tag color={getLevelColor(val)} style={{margin:0}}>{val}</Tag>
+          </span>
+        }},
+      { title:'消息体', dataIndex:['entry','message'], key:'p_msg', ellipsis:true, width:240,
+        render: val => <Tooltip title={val} placement="topLeft" overlayStyle={{maxWidth:500}}>
+          <span className="cell-text">{val||<span className="empty-cell">—</span>}</span>
+        </Tooltip>},
+      { title:'模板', key:'p_tpl', ellipsis:true, width:220,
+        render: (_,rec) => {
+          const val = rec.entry?.template; const src = rec.entry?.template_source
+          const hasPlaceholder = val?.includes('<*>')
+          return <Space size={4}>
+            {getTemplateSourceTag(src)}
+            {hasPlaceholder ? <CheckOutlined style={{color:'#52c41a',fontSize:11}}/> : <CloseOutlined style={{color:'#8c8c8c',fontSize:11}}/>}
+            <Tooltip title={val} placement="topLeft" overlayStyle={{maxWidth:500}}>
+              <span className={`cell-text ${hasPlaceholder ? 'template-dynamic' : 'template-static'}`}>
+                {val||<span className="empty-cell">—</span>}
+              </span>
+            </Tooltip>
+          </Space>
+        }},
+    ] : []
+
+    const QCFG = { good:{icon:<CheckCircleOutlined/>,color:'#52c41a'}, warn:{icon:<WarningOutlined/>,color:'#faad14'}, bad:{icon:<CloseCircleOutlined/>,color:'#ff4d4f'}, skipped:{icon:<CloseOutlined/>,color:'#8c8c8c'} }
+    return [
+      { title:'#', dataIndex:'rowIndex', key:'idx', width:70, fixed:'left',
+        render:(val,rec) => {
+          const q = QCFG[rec.quality] || QCFG.bad
+          const failCnt = rec.failedChecks?.length || 0
+          return <span style={{color:q.color,display:'flex',alignItems:'center',gap:4}}>
+            {q.icon}
+            <span>{val}</span>
+            {rec.quality === 'skipped' && <Tag style={{fontSize:10,padding:'0 4px',marginLeft:2}}>跳过</Tag>}
+            {failCnt > 0 && <Tag color="red" style={{fontSize:10,padding:'0 4px',marginLeft:2}}>{failCnt}项不符</Tag>}
+          </span>
+        }},
+      { title:'原始 CSV 数据', children: csvCols },
+      ...(parseResult ? [{ title:'LILAC 解析结果', children: parsedCols }] : []),
+    ]
+  }, [csvData, parseResult, schema])
+
+  // 非 CSV：解析结果表
+  const logTableData = useMemo(() => {
+    if (fileMode !== 'log') return []
+    return entries.map((entry, idx) => ({ key: idx, rowIndex: idx + 1, entry }))
+  }, [fileMode, entries])
+
+  const pagedLogData = logTableData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const logColumns = useMemo(() => [
+    { title: '#', dataIndex: 'rowIndex', key: 'idx', width: 60, fixed: 'left' },
+    { title: '时间戳', key: 'p_ts', width: 170,
+      render: (_, rec) => {
+        const val = rec.entry?.timestamp
+        return val ? <span className="parsed-ts">{val}</span> : <span className="empty-cell">—</span>
+      }},
+    { title: '级别', key: 'p_lv', width: 100,
+      render: (_, rec) => {
+        const val = rec.entry?.level
+        return val ? <Tag color={getLevelColor(val)} style={{ margin: 0 }}>{val}</Tag> : <span className="empty-cell">—</span>
+      }},
+    { title: '消息体', key: 'p_msg', ellipsis: true, width: 280,
+      render: (_, rec) => {
+        const val = rec.entry?.message
+        return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
+          <span className="cell-text">{val || <span className="empty-cell">—</span>}</span>
+        </Tooltip>
+      }},
+    { title: '模板', key: 'p_tpl', ellipsis: true, width: 240,
+      render: (_, rec) => {
+        const val = rec.entry?.template
+        const src = rec.entry?.template_source
+        const hasPlaceholder = val?.includes('<*>')
+        return <Space size={4}>
+          {getTemplateSourceTag(src)}
+          {hasPlaceholder
+            ? <CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />
+            : <CloseOutlined style={{ color: '#8c8c8c', fontSize: 11 }} />}
+          <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
+            <span className={`cell-text ${hasPlaceholder ? 'template-dynamic' : 'template-static'}`}>
+              {val || <span className="empty-cell">—</span>}
+            </span>
+          </Tooltip>
+        </Space>
+      }},
+    { title: '原始行', key: 'p_raw', ellipsis: true, width: 220,
+      render: (_, rec) => {
+        const val = rec.entry?.raw_text
+        return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 600 }}>
+          <span className="cell-text raw-text">{val || <span className="empty-cell">—</span>}</span>
+        </Tooltip>
+      }},
+  ], [])
+
+  const qualityStats = mergedData.reduce((acc, r) => { acc[r.quality] = (acc[r.quality] || 0) + 1; return acc }, {})
+  const stats = parseResult ? {
+    totalEntries: parseResult.total_entries,
+    totalRows: parseResult.csv_conversion?.total_rows ?? parseResult.total_entries,
+    converted: parseResult.csv_conversion?.converted_rows ?? parseResult.total_entries,
+    cacheHits: parseResult.cache_hits, llmCalls: parseResult.llm_calls,
+    drain3: parseResult.drain3_fallbacks, parseMs: parseResult.parse_time_ms,
+  } : null
+
+  const statsItems = useMemo(() => {
+    if (!stats) return []
+    const common = [
+      { title: '解析耗时', value: `${stats.parseMs?.toFixed(0) ?? '—'} ms`, icon: <ClockCircleOutlined /> },
+      { title: 'LLM 调用', value: stats.llmCalls, icon: <ThunderboltOutlined style={{ color: '#1677ff' }} /> },
+      { title: '缓存命中', value: stats.cacheHits, icon: <DatabaseOutlined style={{ color: '#52c41a' }} /> },
+      { title: 'Drain3 兜底', value: stats.drain3, icon: <WarningOutlined style={{ color: '#fa8c16' }} /> },
+    ]
+    if (fileMode === 'csv') {
+      return [
+        { title: '原始行数', value: stats.totalRows, icon: <DatabaseOutlined /> },
+        { title: '成功转换', value: stats.converted, icon: <CheckCircleOutlined style={{ color: '#52c41a' }} /> },
+        ...common,
+      ]
+    }
+    return [
+      { title: '解析条目', value: stats.totalEntries, icon: <DatabaseOutlined /> },
+      ...common,
+    ]
+  }, [stats, fileMode])
+
+  const fileInfoExtra = fileMode === 'csv' && csvData
+    ? ` · ${csvData.rows.length} 行 · ${csvData.headers.length} 列`
+    : rawPreview
+      ? ` · ${rawPreview.lineCount} 行`
+      : ''
+
+  return (
+    <div className="log-compare-page">
+      {/* 页头 */}
+      <div className="page-header">
+        <div className="header-left">
+          <Title level={4} style={{margin:0}}>
+            <TableOutlined style={{marginRight:8,color:'#00d4ff'}} />日志解析
+          </Title>
+          <Text type="secondary" style={{fontSize:13,marginTop:4}}>
+            支持 CSV / LOG / TXT / TRC 等格式；CSV 可逐字段对比，其他格式展示 LILAC 结构化解析结果
+          </Text>
+        </div>
+        {(selectedFile||parseResult) && <Button icon={<ReloadOutlined/>} onClick={handleReset}>重新上传</Button>}
+      </div>
+
+      {/* 上传区 */}
+      {!selectedFile && (
+        <Card className="upload-card">
+          <Dragger accept={ACCEPT_ATTR} multiple={false} beforeUpload={handleFileSelect} showUploadList={false} className="upload-dragger">
+            <p className="ant-upload-drag-icon"><InboxOutlined style={{color:'#00d4ff',fontSize:48}}/></p>
+            <p className="ant-upload-text">拖入日志文件，或点击选择</p>
+            <p className="ant-upload-hint">
+              支持 {ACCEPTED_EXTENSIONS.join('、')}；CSV 上传后可逐字段验证，其他格式直接展示解析结果
+            </p>
+          </Dragger>
+          <div style={{textAlign:'center',marginTop:16}}>
+            <Divider plain style={{color:'rgba(255,255,255,0.25)',borderColor:'rgba(255,255,255,0.1)'}}>或者</Divider>
+            <Button icon={<PlayCircleOutlined/>} onClick={handleLoadDemo} className="demo-btn" size="large">
+              查看内置示例（lora_request_trace.csv 节选）
+            </Button>
+            <div style={{marginTop:8,color:'rgba(255,255,255,0.35)',fontSize:12}}>无需上传，直接展示 8 行真实解析与全字段验证结果</div>
+          </div>
+        </Card>
+      )}
+
+      {/* 文件信息 */}
+      {selectedFile && !parseResult && (
+        <Card className="file-info-card">
+          <Row align="middle" gutter={16}>
+            <Col><FileTextOutlined style={{fontSize:32,color:'#00d4ff'}}/></Col>
+            <Col flex={1}>
+              <div style={{fontWeight:600}}>{selectedFile.name}</div>
+              <Text type="secondary" style={{fontSize:12}}>
+                {selectedFile.size > 0 ? `${(selectedFile.size/1024).toFixed(1)} KB` : '示例文件'}
+                {fileInfoExtra}
+                {fileMode === 'log' && <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>日志文件</Tag>}
+                {fileMode === 'csv' && <Tag color="cyan" style={{ marginLeft: 8, fontSize: 11 }}>CSV</Tag>}
+              </Text>
+            </Col>
+            <Col>
+              <Button type="primary" icon={<ThunderboltOutlined/>} size="large" loading={loading} onClick={handleParse} className="parse-btn">
+                开始 LILAC 解析
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
+      {loading && (
+        <Card className="loading-card">
+          <Space direction="vertical" style={{width:'100%'}} align="center">
+            <Text>正在解析，请稍候……</Text>
+            <Progress percent={100} status="active" showInfo={false} style={{width:360}}/>
+          </Space>
+        </Card>
+      )}
+      {error && <Alert type="error" message="解析失败" description={error} showIcon closable style={{marginBottom:16}}/>}
+
+      {/* 统计行 */}
+      {parseResult && stats && (
+        <Row gutter={12} className="stats-row">
+          {statsItems.map(s => (
+            <Col span={fileMode === 'csv' ? 4 : 5} key={s.title}>
+              <Card className="stat-card"><Statistic title={s.title} value={s.value} prefix={s.icon}/></Card>
+            </Col>
+          ))}
+        </Row>
+      )}
+
+      {/* 列角色识别（仅 CSV） */}
+      {parseResult && fileMode === 'csv' && schema && (
+        <Card className="schema-card" title="列角色识别结果">
+          <Row gutter={16} align="middle" wrap>
+            <Col><Text type="secondary">时间戳：</Text><Tag color="cyan">{schema.timestamp_col||'未识别'}</Tag></Col>
+            <Col><Text type="secondary">级别：</Text><Tag color="purple">{schema.level_col||'未识别'}</Tag></Col>
+            <Col><Text type="secondary">消息：</Text><Tag color="blue">{schema.message_col||'未识别'}</Tag></Col>
+            <Col flex={1}><Text type="secondary">附加：</Text>{(schema.extra_cols||[]).map(c=><Tag key={c}>{c}</Tag>)}</Col>
+            <Col>
+              <Divider type="vertical"/>
+              <Text type="secondary">质量：</Text>
+              {Object.entries(qualityStats).map(([q,cnt]) => {
+                const cfg={good:{color:'#52c41a',label:'全字段匹配'},warn:{color:'#faad14',label:'部分字段不符'},bad:{color:'#ff4d4f',label:'解析失败'},skipped:{color:'#8c8c8c',label:'跳过转换'}}[q]
+                return cfg ? <span key={q} style={{color:cfg.color,marginLeft:8,fontSize:13}}>{cnt} {cfg.label}</span> : null
+              })}
+            </Col>
+          </Row>
+          {parseResult.csv_conversion?.warnings?.length > 0 && (
+            <Alert type="warning" style={{marginTop:12}} message={parseResult.csv_conversion.warnings.join('；')} showIcon/>
+          )}
+        </Card>
+      )}
+
+      {/* 准确率面板（仅 CSV） */}
+      {fileMode === 'csv' && accuracy && <AccuracyPanel accuracy={accuracy} schema={schema}/>}
+
+      {/* 模板统计（非 CSV） */}
+      {fileMode === 'log' && parseResult && entries.length > 0 && (
+        <TemplateStatsPanel entries={entries} />
+      )}
+
+      {/* 日志预览（非 CSV，解析前） */}
+      {fileMode === 'log' && rawPreview && !parseResult && (
+        <Card className="compare-card" title={
+          <Space>
+            <FileTextOutlined />原始日志预览
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              前 {rawPreview.sampleLines.length} 行 · 共 {rawPreview.lineCount} 行
+            </Text>
+          </Space>
+        }>
+          <pre className="log-preview-pre">
+            {rawPreview.sampleLines.join('\n')}
+            {rawPreview.lineCount > rawPreview.sampleLines.length && '\n…'}
+          </pre>
+        </Card>
+      )}
+
+      {/* CSV 对比表格 */}
+      {fileMode === 'csv' && csvData && (
+        <Card className="compare-card" title={
+          <Space>
+            <TableOutlined/>对比详情
+            <Text type="secondary" style={{fontSize:12,fontWeight:400}}>
+              {mergedData.length} 行 · 点击行左侧 ▶ 展开字段级对比详情
+              {!parseResult && ' · 点击"开始 LILAC 解析"查看结果'}
+            </Text>
+          </Space>
+        }>
+          {mergedData.length === 0 ? <Empty description="暂无数据"/> : (
+            <Table
+              columns={columns}
+              dataSource={pagedData}
+              expandable={parseResult ? {
+                expandedRowRender: rec => <FieldDetailTable checks={rec.fieldChecks}/>,
+                rowExpandable: rec => rec.fieldChecks?.length > 0,
+              } : undefined}
+              pagination={{
+                current:page, pageSize:PAGE_SIZE, total:mergedData.length,
+                onChange:setPage, showTotal:(t,r)=>`${r[0]}-${r[1]} / ${t} 行`, showSizeChanger:false,
+              }}
+              scroll={{ x:'max-content', y:440 }}
+              size="small" className="compare-table" bordered
+            />
+          )}
+        </Card>
+      )}
+
+      {/* 日志解析结果表（非 CSV） */}
+      {fileMode === 'log' && parseResult && (
+        <Card className="compare-card" title={
+          <Space>
+            <TableOutlined />解析结果
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              {logTableData.length} 条 · 点击行左侧 ▶ 查看参数与原始文本
+            </Text>
+          </Space>
+        }>
+          {logTableData.length === 0 ? <Empty description="暂无解析结果"/> : (
+            <Table
+              columns={logColumns}
+              dataSource={pagedLogData}
+              expandable={{
+                expandedRowRender: rec => <EntryDetailTable entry={rec.entry} />,
+                rowExpandable: rec => !!rec.entry,
+              }}
+              pagination={{
+                current: page, pageSize: PAGE_SIZE, total: logTableData.length,
+                onChange: setPage, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} 条`, showSizeChanger: false,
+              }}
+              scroll={{ x: 'max-content', y: 440 }}
+              size="small" className="compare-table" bordered
+            />
+          )}
+        </Card>
+      )}
+    </div>
+  )
+}
+
+export default LogCompare

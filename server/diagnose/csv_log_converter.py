@@ -106,6 +106,8 @@ class ConversionResult:
     total_rows: int
     converted_rows: int
     warnings: List[str] = field(default_factory=list)
+    row_mapping: List[int] = field(default_factory=list)
+    csv_rows: List[Dict[str, str]] = field(default_factory=list)
 
 
 # ============================================================
@@ -149,11 +151,13 @@ class CsvLogConverter:
         schema = self._infer_schema(headers, sample, warnings)
 
         log_lines: List[str] = []
+        row_mapping: List[int] = []
         converted = 0
-        for row in rows:
+        for idx, row in enumerate(rows):
             line = self._row_to_log_line(row, schema)
             if line:
                 log_lines.append(line)
+                row_mapping.append(idx)
                 converted += 1
 
         return ConversionResult(
@@ -162,6 +166,8 @@ class CsvLogConverter:
             total_rows=len(rows),
             converted_rows=converted,
             warnings=warnings,
+            row_mapping=row_mapping,
+            csv_rows=rows,
         )
 
     def schema_only(self, csv_text: str) -> Tuple[ColumnSchema, List[str]]:

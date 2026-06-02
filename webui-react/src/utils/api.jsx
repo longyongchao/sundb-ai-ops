@@ -687,4 +687,49 @@ export const sundbTrcAPI = {
   }
 };
 
+/**
+ * LILAC 日志解析 API
+ */
+export const lilacAPI = {
+  /**
+   * 上传 CSV 文件，返回列角色推断 + LILAC 解析结果
+   * @param {File} file - CSV 文件对象
+   */
+  parseCsv: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/diagnose/lilac/parse_csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 分钟（大文件）
+    })
+  },
+
+  /**
+   * 上传任意日志文件（.log / .txt / .csv）解析
+   * @param {File} file
+   */
+  parseFile: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/diagnose/lilac/parse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    })
+  },
+
+  /** 直接提交文本解析 */
+  parseText: (text, sourceFile = null) =>
+    api.post('/diagnose/lilac/parse_text', { text, source_file: sourceFile }),
+
+  /** 缓存统计 */
+  getCacheStats: () => api.get('/diagnose/lilac/cache/stats'),
+
+  /** 查看已缓存模板 */
+  getCacheTemplates: (limit = 100, offset = 0) =>
+    api.get('/diagnose/lilac/cache/templates', { params: { limit, offset } }),
+
+  /** 清空缓存 */
+  clearCache: () => api.delete('/diagnose/lilac/cache'),
+}
+
 export default api;

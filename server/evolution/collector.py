@@ -140,17 +140,17 @@ def capture_diagnosis_result(anomaly_info: Dict[str, Any], result: Dict[str, Any
 
 
 def capture_user_feedback(
-    message_id: str = None,
-    score: float = None,
+    message_id: Optional[str] = None,
+    score: Optional[float] = None,
     reason: str = "",
-    record_id: int = None,
-    case_id: int = None,
-    evolution_case_id: int = None,
+    record_id: Optional[int] = None,
+    case_id: Optional[int] = None,
+    evolution_case_id: Optional[int] = None,
     feedback_type: str = "user_feedback",
     accepted: Optional[bool] = None,
-    metric_recovery: Dict[str, Any] = None,
+    metric_recovery: Optional[Dict[str, Any]] = None,
     recurrence: Optional[bool] = None,
-    raw_feedback: Dict[str, Any] = None,
+    raw_feedback: Optional[Dict[str, Any]] = None,
 ) -> Optional[int]:
     from server.db.repository.evolution_repository import (
         create_evolution_feedback,

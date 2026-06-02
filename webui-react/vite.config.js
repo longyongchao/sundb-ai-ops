@@ -51,6 +51,7 @@ export default defineConfig({
   },
   server: {
     port: 3001,
+    strictPort: true,
     proxy: {
       // API 代理 - 不重写路径，直接转发
       '/api': {

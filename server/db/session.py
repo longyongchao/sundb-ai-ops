@@ -80,7 +80,10 @@ try:
 except Exception:
     pass
 try:
-    from server.db.models.evolution_model import EvolutionCase, EvolutionFeedback
+    from server.db.models.evolution_model import (
+        EvolutionCase, EvolutionFeedback,
+        EvolutionPattern, EvolutionCandidate,
+    )
 except Exception:
     pass
 Base.metadata.create_all(bind=engine)

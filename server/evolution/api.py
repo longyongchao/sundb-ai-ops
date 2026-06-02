@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""FastAPI handlers for the self-evolution V0.1 module."""
+"""FastAPI handlers for the self-evolution module (V0.1 + V0.2)."""
 from fastapi import Body
 
 from server.evolution.collector import capture_user_feedback
@@ -63,3 +63,82 @@ def create_evolution_feedback(payload: EvolutionFeedbackInput = Body(...)):
         return BaseResponse(code=200, msg="Success", data={"feedback_id": feedback_id})
     except Exception as e:
         return BaseResponse(code=500, msg=f"Failed to create evolution feedback: {str(e)}")
+
+
+# ── V0.2: Pattern + Candidate ─────────────────────────────────────────────────
+
+def list_evolution_patterns(
+    limit: int = 20,
+    offset: int = 0,
+    pattern_type: str = None,
+    status: str = None,
+):
+    try:
+        from server.db.repository.evolution_repository import (
+            count_evolution_patterns,
+            list_evolution_patterns as repo_list,
+        )
+        patterns = repo_list(limit=limit, offset=offset, pattern_type=pattern_type, status=status)
+        total = count_evolution_patterns(pattern_type=pattern_type, status=status)
+        return BaseResponse(
+            code=200,
+            msg="Success",
+            data={"patterns": patterns, "total": total, "limit": limit, "offset": offset},
+        )
+    except Exception as e:
+        return BaseResponse(code=500, msg=f"Failed to list evolution patterns: {str(e)}")
+
+
+def list_evolution_candidates(
+    limit: int = 20,
+    offset: int = 0,
+    candidate_type: str = None,
+    status: str = None,
+    risk_level: str = None,
+):
+    try:
+        from server.db.repository.evolution_repository import (
+            count_evolution_candidates,
+            list_evolution_candidates as repo_list,
+        )
+        candidates = repo_list(
+            limit=limit, offset=offset,
+            candidate_type=candidate_type, status=status, risk_level=risk_level,
+        )
+        total = count_evolution_candidates(
+            candidate_type=candidate_type, status=status, risk_level=risk_level,
+        )
+        return BaseResponse(
+            code=200,
+            msg="Success",
+            data={"candidates": candidates, "total": total, "limit": limit, "offset": offset},
+        )
+    except Exception as e:
+        return BaseResponse(code=500, msg=f"Failed to list evolution candidates: {str(e)}")
+
+
+def generate_evolution_candidates(min_cases: int = 3):
+    """Trigger pattern mining followed by candidate generation.
+
+    Mines patterns from recent negative/uncertain cases, then generates a
+    candidate patch for each discovered pattern.  All results are persisted
+    to the database.
+    """
+    try:
+        from server.evolution.candidate_generator import generate_all_candidates
+        from server.evolution.pattern_miner import mine_patterns
+
+        patterns = mine_patterns(min_cases=min_cases, save=True)
+        candidates = generate_all_candidates(patterns, save=True)
+        return BaseResponse(
+            code=200,
+            msg="Success",
+            data={
+                "patterns_found": len(patterns),
+                "candidates_generated": len(candidates),
+                "patterns": patterns,
+                "candidates": candidates,
+            },
+        )
+    except Exception as e:
+        return BaseResponse(code=500, msg=f"Failed to generate evolution candidates: {str(e)}")

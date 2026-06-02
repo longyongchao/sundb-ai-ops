@@ -1,6 +1,4 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { message } from 'antd'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
 import Dashboard from '@/pages/Dashboard'
 import Diagnosis from '@/pages/Diagnosis'
@@ -11,6 +9,7 @@ import Monitoring from '@/pages/Monitoring'
 import Profile from '@/pages/Profile'
 import Evolution from '@/pages/Evolution'
 import Login from '@/pages/Login'
+import LogCompare from '@/pages/LogCompare'
 import { DiagnosisProvider } from '@/context/DiagnosisContext'
 
 const ProtectedRoute = ({ children }) => {
@@ -69,6 +68,7 @@ function App() {
             <Route path="monitoring" element={<Monitoring />} />
             <Route path="evolution" element={<Evolution />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="log-compare" element={<LogCompare />} />
           </Route>
         </Routes>
       </BrowserRouter>

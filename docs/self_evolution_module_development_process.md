@@ -34,12 +34,12 @@ SunDB AI-Ops 自进化智能诊断优化软件 V1.0
 
 建议版本节奏：
 
-| 版本 | 目标 | 可登记/可演示材料 |
-| --- | --- | --- |
-| V0.1 | 诊断案例采集、反馈关联 | 源码、接口说明、数据结构 |
-| V0.2 | 评分器、模式挖掘、候选生成 | 算法说明、测试报告 |
-| V0.3 | 沙盒回放、安全门控、版本注册 | 回放报告、流程图 |
-| V1.0 | 前端页面、完整闭环演示、文档归档 | 软著材料、专利交底书 |
+| 版本 | 目标 | 可登记/可演示材料 | 状态 |
+| --- | --- | --- | --- |
+| V0.1 | 诊断案例采集、评分器、反馈关联、自进化 API | 源码、接口说明、数据结构、单元测试 | **已完成** |
+| V0.2 | 模式挖掘、候选生成 | 算法说明、测试报告 | **已完成** |
+| V0.3 | 沙盒回放、安全门控、版本注册 | 回放报告、流程图 | 待开发 |
+| V1.0 | 前端页面完善、完整闭环演示、文档归档 | 软著材料、专利交底书 | 待开发 |
 
 ## 4. 目标目录结构
 
@@ -47,278 +47,177 @@ SunDB AI-Ops 自进化智能诊断优化软件 V1.0
 
 ```text
 server/evolution/
-  __init__.py
-  schemas.py
-  collector.py
-  evaluator.py
-  pattern_miner.py
-  candidate_generator.py
-  replay_runner.py
-  gatekeeper.py
-  registry.py
-  api.py
+  __init__.py              ✅ V0.1
+  schemas.py               ✅ V0.1
+  collector.py             ✅ V0.1
+  evaluator.py             ✅ V0.1
+  api.py                   ✅ V0.1 + V0.2 接口
+  pattern_miner.py         ✅ V0.2（4 种规则挖掘）
+  candidate_generator.py   ✅ V0.2（4 种候选生成器）
+  replay_runner.py         ⬜ V0.3 待开发
+  gatekeeper.py            ⬜ V0.3 待开发
+  registry.py              ⬜ V0.3 待开发
 ```
 
 新增数据库文件：
 
 ```text
-server/db/models/evolution_model.py
-server/db/repository/evolution_repository.py
+server/db/models/evolution_model.py       ✅ V0.1+V0.2（EvolutionCase/Feedback/Pattern/Candidate）
+server/db/repository/evolution_repository.py  ✅ V0.1+V0.2
 ```
 
 新增测试：
 
 ```text
-tests/unit/test_evolution_collector.py
-tests/unit/test_evolution_evaluator.py
-tests/unit/test_evolution_api.py
-tests/unit/test_evolution_gatekeeper.py
+tests/unit/test_evolution_collector.py          ✅ V0.1（4 个测试）
+tests/unit/test_evolution_evaluator.py          ✅ V0.1（4 个测试）
+tests/unit/test_evolution_api.py                ✅ V0.1（5 个测试）
+tests/unit/test_evolution_pattern_miner.py      ✅ V0.2（18 个测试）
+tests/unit/test_evolution_candidate_generator.py ✅ V0.2（10 个测试）
+tests/unit/test_evolution_gatekeeper.py         ⬜ V0.3 待开发
 ```
 
 可选前端：
 
 ```text
-webui-react/src/pages/Evolution/
-webui-react/src/api/evolution.js
+webui-react/src/pages/Evolution/  ✅ 已完成（V0.1 基础页面）
+webui-react/src/api/evolution.js  ✅ 已完成（通过 utils/api.jsx 集成）
 ```
 
 ## 5. 第一阶段：数据模型与仓储层
 
-### 5.1 新增 SQLAlchemy 模型
+### 5.1 数据库模型（V0.1 + V0.2 已完成，V0.3 待扩展）
 
 文件：`server/db/models/evolution_model.py`
 
-建议定义六张表：
+计划六张表，当前已实现四张：
 
-- `EvolutionCase`
-- `EvolutionFeedback`
-- `EvolutionPattern`
-- `EvolutionCandidate`
-- `EvolutionExperiment`
-- `EvolutionArtifact`
+| 表名 | 状态 | 说明 |
+| --- | --- | --- |
+| `evolution_cases` | ✅ V0.1 | 诊断案例快照（输入/轨迹/知识/输出/资产版本/评分） |
+| `evolution_feedback` | ✅ V0.1 | 用户反馈与指标恢复记录 |
+| `evolution_patterns` | ✅ V0.2 | 从历史案例挖掘的失败模式 |
+| `evolution_candidates` | ✅ V0.2 | 候选补丁（knowledge/tool/prompt/retrieval） |
+| `evolution_experiments` | ⬜ V0.3 | 沙盒回放实验结果 |
+| `evolution_artifacts` | ⬜ V0.3 | 已发布的版本化资产 |
 
-字段骨架：
+V0.2 新增模型字段：
 
 ```python
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from server.db.base import Base
+class EvolutionPattern(Base):
+    __tablename__ = "evolution_patterns"
+    id, pattern_type, cluster_key, evidence_case_ids,
+    failure_signature, suggested_update_type, confidence,
+    status, create_time
 
-
-class EvolutionCase(Base):
-    __tablename__ = "evolution_cases"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    record_id = Column(Integer, ForeignKey("diagnosis_records.id"), nullable=True, index=True)
-    diagnosis_id = Column(String(100), nullable=True, index=True)
-    case_fingerprint = Column(String(128), nullable=False, index=True)
-    anomaly_type = Column(String(100), nullable=True, index=True)
-    input_snapshot = Column(JSON, nullable=True)
-    trace_snapshot = Column(JSON, nullable=True)
-    knowledge_snapshot = Column(JSON, nullable=True)
-    output_snapshot = Column(JSON, nullable=True)
-    asset_versions = Column(JSON, nullable=True)
-    outcome_score = Column(Float, default=0.0)
-    label = Column(String(32), default="uncertain_case")
-    status = Column(String(32), default="captured")
-    create_time = Column(DateTime, default=datetime.now)
-    update_time = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+class EvolutionCandidate(Base):
+    __tablename__ = "evolution_candidates"
+    id, candidate_type, source_pattern_id (FK→evolution_patterns),
+    patch_content, expected_benefit, risk_level, status,
+    evidence_case_ids, base_artifact_version, target_artifact_type,
+    create_time, update_time
 ```
 
-其他表建议字段：
+### 5.2 注册模型（已完成）
 
-```text
-evolution_feedback:
-  id, case_id, record_id, feedback_type, score, reason, accepted,
-  metric_recovery, recurrence, raw_feedback, create_time
-
-evolution_patterns:
-  id, pattern_type, cluster_key, evidence_case_ids, failure_signature,
-  suggested_update_type, confidence, status, create_time
-
-evolution_candidates:
-  id, candidate_type, source_pattern_id, patch_content, expected_benefit,
-  risk_level, status, evidence_case_ids, base_artifact_version,
-  target_artifact_type, create_time, update_time
-
-evolution_experiments:
-  id, candidate_id, baseline_metrics, candidate_metrics, regression_cases,
-  pass_gate, report, create_time
-
-evolution_artifacts:
-  id, artifact_type, version, content_hash, content_snapshot,
-  rollback_to, active, promoted_by_candidate_id, create_time
-```
-
-### 5.2 注册模型
-
-修改文件：`server/db/session.py`
-
-在已有诊断模型导入后增加：
+文件：`server/db/session.py`，已实际导入的模型：
 
 ```python
 try:
     from server.db.models.evolution_model import (
-        EvolutionCase, EvolutionFeedback, EvolutionPattern,
-        EvolutionCandidate, EvolutionExperiment, EvolutionArtifact
+        EvolutionCase, EvolutionFeedback,   # V0.1
+        EvolutionPattern, EvolutionCandidate,  # V0.2
     )
 except Exception:
     pass
 ```
 
-项目当前使用 `Base.metadata.create_all(bind=engine)` 自动建表，因此第一阶段可以不引入 Alembic。若后续进入生产，建议补充正式迁移脚本。
+项目使用 `Base.metadata.create_all(bind=engine)` 自动建表，无需 Alembic。V0.3 新增 `EvolutionExperiment`、`EvolutionArtifact` 时按相同方式追加导入即可。
 
-### 5.3 新增仓储层
+### 5.3 仓储层（V0.1 + V0.2 已完成）
 
 文件：`server/db/repository/evolution_repository.py`
 
-至少实现：
+**V0.1 已实现：**
 
 ```python
-from typing import Dict, List, Optional
-from server.db.session import with_session
-from server.db.models.evolution_model import EvolutionCase, EvolutionFeedback
+create_evolution_case(payload)
+get_evolution_case_by_id(case_id)
+get_evolution_case_by_record_id(record_id)
+list_evolution_cases(limit, offset, label, status, anomaly_type)
+count_evolution_cases(label, status, anomaly_type)
+list_evolution_cases_for_mining(limit)          # 供模式挖掘专用（返回 negative+uncertain）
+create_evolution_feedback(payload)
+list_feedback_for_case(case_id)
+update_evolution_case_score(case_id, outcome_score, label)
+get_evolution_metrics()                          # 综合统计（V0.2 起含 Pattern/Candidate 计数）
+```
 
+**V0.2 新增：**
 
-@with_session
-def create_evolution_case(session, payload: Dict) -> Optional[int]:
-    case = EvolutionCase(**payload)
-    session.add(case)
-    session.flush()
-    return case.id
-
-
-@with_session
-def get_evolution_case_by_record_id(session, record_id: int) -> Optional[Dict]:
-    case = session.query(EvolutionCase).filter_by(record_id=record_id).first()
-    return case.to_dict() if case else None
-
-
-@with_session
-def list_evolution_cases(session, limit: int = 20, offset: int = 0, label: str = None) -> List[Dict]:
-    query = session.query(EvolutionCase)
-    if label:
-        query = query.filter_by(label=label)
-    rows = query.order_by(EvolutionCase.create_time.desc()).offset(offset).limit(limit).all()
-    return [row.to_dict() for row in rows]
-
-
-@with_session
-def create_evolution_feedback(session, payload: Dict) -> Optional[int]:
-    feedback = EvolutionFeedback(**payload)
-    session.add(feedback)
-    session.flush()
-    return feedback.id
+```python
+create_evolution_pattern(payload)
+get_evolution_pattern_by_id(pattern_id)
+list_evolution_patterns(limit, offset, pattern_type, status)
+count_evolution_patterns(pattern_type, status)
+create_evolution_candidate(payload)
+get_evolution_candidate_by_id(candidate_id)
+list_evolution_candidates(limit, offset, candidate_type, status, risk_level)
+count_evolution_candidates(candidate_type, status, risk_level)
 ```
 
 验收：
 
-- `python -m pytest tests/unit/test_evolution_collector.py`
-- 启动服务时不会因为新模型导入失败影响原 API。
+```bash
+python -m pytest tests/unit/ -v --basetemp=.pytest_tmp
+```
 
-## 6. 第二阶段：Schema 与采集器
+## 6. 第二阶段：Schema 与采集器（V0.1 已完成）
 
-### 6.1 定义内部 Schema
+### 6.1 定义内部 Schema（已完成）
 
 文件：`server/evolution/schemas.py`
 
-建议使用 Pydantic，方便 API 和内部函数共享：
+V0.1 已实现 `EvolutionFeedbackInput`，供 API 层和采集器共用：
 
 ```python
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-
-
-class EvolutionCaseInput(BaseModel):
-    record_id: Optional[int] = None
-    diagnosis_id: Optional[str] = None
-    anomaly_info: Dict[str, Any] = Field(default_factory=dict)
-    diagnosis_result: Dict[str, Any] = Field(default_factory=dict)
-    asset_versions: Dict[str, str] = Field(default_factory=dict)
-
-
 class EvolutionFeedbackInput(BaseModel):
-    record_id: Optional[int] = None
-    case_id: Optional[int] = None
-    feedback_type: str = "user_feedback"
-    score: Optional[float] = None
-    reason: str = ""
-    accepted: Optional[bool] = None
-    raw_feedback: Dict[str, Any] = Field(default_factory=dict)
+    record_id: Optional[int]           # 诊断记录 ID
+    case_id: Optional[int]             # 自进化案例 ID
+    evolution_case_id: Optional[int]   # 同 case_id，兼容前端命名
+    message_id: Optional[str]          # 聊天消息 ID
+    feedback_type: str                 # 反馈类型，默认 "user_feedback"
+    score: Optional[float]             # 评分，支持 0-100 或 0-1
+    reason: str                        # 反馈原因
+    accepted: Optional[bool]           # 诊断建议是否被采纳
+    metric_recovery: Optional[Dict]    # 修复后指标恢复情况
+    recurrence: Optional[bool]         # 同类问题是否复发
+    raw_feedback: Dict[str, Any]       # 原始反馈内容
 ```
 
-### 6.2 实现采集器
+> **说明**：`EvolutionCaseInput` 暂不需要，采集器 `capture_diagnosis_result()` 直接接收 `anomaly_info` 和 `result` 字典，内部完成快照构建和脱敏。如未来需要对外暴露案例提交接口，可再新增此 Schema。
+
+### 6.2 实现采集器（V0.1 已完成）
 
 文件：`server/evolution/collector.py`
 
-核心函数：
+V0.1 实现了以下关键能力（比原设计骨架更完整）：
 
-```python
-import hashlib
-import json
-from typing import Dict, Any
-from server.db.repository.evolution_repository import create_evolution_case
+- `sanitize_snapshot(value)`：递归脱敏，自动遮蔽 password/token/api_key 等敏感字段，截断超长字符串（默认 4000 字符），处理不可序列化对象
+- `build_case_fingerprint(anomaly_info, result)`：基于异常类型、描述、根因组合生成 SHA-256 指纹，用于去重和聚类
+- `get_current_asset_versions()`：计算知识库文件 SHA-256 哈希，记录知识、检索策略、工具策略、提示词的版本快照
+- `capture_diagnosis_result(anomaly_info, result, record_id)`：采集完整诊断快照（输入、推理轨迹、知识命中、输出、资产版本），写入 `evolution_cases`
+- `capture_user_feedback(...)`：采集用户反馈，自动关联 `evolution_case`，并触发评分器更新 `outcome_score` 和 `label`
 
+额外实现的 `reflection_insights` 字段采集支持 Tree Search 的反思步骤，以及 `quick_action_guide` 的输出快照。
 
-def build_case_fingerprint(anomaly_info: Dict[str, Any], result: Dict[str, Any]) -> str:
-    seed = {
-        "alert_type": anomaly_info.get("alert_type"),
-        "description": anomaly_info.get("description"),
-        "root_causes": [rc.get("type") for rc in result.get("root_causes", [])],
-    }
-    raw = json.dumps(seed, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def capture_diagnosis_result(anomaly_info: Dict[str, Any], result: Dict[str, Any], record_id: int = None) -> int:
-    search_stats = result.get("search_stats", {})
-    reasoning_steps = result.get("reasoning_steps", [])
-    retrieved_knowledge = result.get("retrieved_knowledge", [])
-
-    payload = {
-        "record_id": record_id or result.get("record_id"),
-        "diagnosis_id": anomaly_info.get("diagnosis_id"),
-        "case_fingerprint": build_case_fingerprint(anomaly_info, result),
-        "anomaly_type": anomaly_info.get("alert_type") or result.get("anomaly_type"),
-        "input_snapshot": anomaly_info,
-        "trace_snapshot": {
-            "reasoning_steps": reasoning_steps,
-            "search_stats": search_stats,
-            "tool_match_scores": result.get("tool_match_scores", []),
-        },
-        "knowledge_snapshot": {
-            "retrieved_knowledge": retrieved_knowledge,
-            "knowledge_chunks_used": search_stats.get("knowledge_matches", 0),
-        },
-        "output_snapshot": {
-            "root_causes": result.get("root_causes", []),
-            "solutions": result.get("solutions", []),
-            "confidence": result.get("confidence", 0.0),
-            "diagnosis_time": result.get("diagnosis_time", 0.0),
-        },
-        "asset_versions": get_current_asset_versions(),
-        "status": "captured",
-    }
-    return create_evolution_case(payload)
-
-
-def get_current_asset_versions() -> Dict[str, str]:
-    return {
-        "knowledge": "builtin-current",
-        "retrieval_policy": "default",
-        "tool_policy": "default",
-        "prompt": "default",
-    }
-```
-
-### 6.3 接入诊断流程
+### 6.3 接入诊断流程（V0.1 已完成）
 
 修改文件：`server/diagnose/diagnose.py`
 
 接入位置：`quick_diagnose()` 中 `_save_diagnosis_to_database(...)` 成功后。
 
-建议补丁逻辑：
+V0.1 已实现，采集失败不影响诊断主流程，`result` 中携带 `evolution_case_id`：
 
 ```python
 try:
@@ -328,132 +227,85 @@ try:
         result=result,
         record_id=result.get("record_id")
     )
-    result["evolution_case_id"] = evolution_case_id
+    if evolution_case_id:
+        result["evolution_case_id"] = evolution_case_id
+        logger.info(f"自进化案例已采集，ID: {evolution_case_id}, record_id={record_id}")
 except Exception as evolution_error:
     logger.warning(f"自进化案例采集失败，不影响诊断主流程: {evolution_error}")
 ```
 
-要求：
-
-- 采集失败不能导致诊断失败。
-- `result` 中返回 `evolution_case_id`，方便前端和反馈关联。
-- `record_id` 和 `evolution_case_id` 均写入日志。
-
-### 6.4 接入反馈流程
+### 6.4 接入反馈流程（V0.1 已完成）
 
 修改文件：`server/chat/feedback.py`
 
-保留原 `feedback_message_to_db()`，追加自进化反馈写入：
+V0.1 已实现，在原 `feedback_message_to_db()` 后追加自进化反馈写入。前端可传 `record_id`、`evolution_case_id`、`accepted` 三个扩展参数，采集失败不影响原反馈流程。
 
-```python
-try:
-    from server.evolution.collector import capture_user_feedback
-    capture_user_feedback(
-        message_id=message_id,
-        score=score,
-        reason=reason,
-        raw_feedback={"message_id": message_id, "score": score, "reason": reason},
-    )
-except Exception as evolution_error:
-    logger.warning(f"自进化反馈采集失败: {evolution_error}")
-```
-
-如果前端能传 `record_id` 或 `evolution_case_id`，优先扩展接口参数；否则第一阶段可以只落 `message_id`，后续通过诊断结果关联。
-
-## 7. 第三阶段：评分器
+## 7. 第三阶段：评分器（V0.1 已完成）
 
 文件：`server/evolution/evaluator.py`
 
-输入：`EvolutionCase`、反馈、修复后指标。
+输入：`EvolutionCase`（dict）、反馈（dict）、修复后指标（dict）。
 
-输出：`outcome_score` 和 `label`。
+输出：`{"outcome_score": float, "label": str}`。
 
-代码骨架：
+V0.1 已完整实现五个子评分维度（与设计一致）：
 
 ```python
-def calculate_outcome_score(case: dict, feedback: dict = None, post_metrics: dict = None) -> dict:
-    root_cause_match_score = calc_root_cause_match(case, feedback)
-    metric_recovery_score = calc_metric_recovery(case, post_metrics)
-    user_feedback_score = calc_user_feedback(feedback)
-    recurrence_penalty_score = calc_recurrence(case)
-    efficiency_score = calc_efficiency(case)
-
-    score = (
-        0.35 * root_cause_match_score +
-        0.25 * metric_recovery_score +
-        0.15 * user_feedback_score +
-        0.15 * recurrence_penalty_score +
-        0.10 * efficiency_score
-    )
-
-    if score >= 0.75:
-        label = "positive_case"
-    elif score <= 0.45:
-        label = "negative_case"
-    else:
-        label = "uncertain_case"
-
-    return {"outcome_score": round(score, 4), "label": label}
+score = (
+    0.35 * calc_root_cause_match(case, feedback)   # 根因匹配度（基于置信度）
+    + 0.25 * calc_metric_recovery(case, post_metrics)  # 指标恢复度
+    + 0.15 * calc_user_feedback(feedback)           # 用户反馈评分
+    + 0.15 * calc_recurrence(case, feedback)        # 复发惩罚
+    + 0.10 * calc_efficiency(case)                  # 诊断效率
+)
 ```
 
-测试重点：
+**关键设计决策**：无反馈时直接返回 `{"outcome_score": 0.0, "label": "uncertain_case"}`，不基于模型置信度自动打高分，避免自我强化偏差。
 
-- 无反馈时不会报错，进入 `uncertain_case`。
-- 高评分反馈 + 有根因 + 耗时合理时进入 `positive_case`。
-- 低置信、无根因、负反馈时进入 `negative_case`。
+已通过测试：
 
-## 8. 第四阶段：模式挖掘与候选生成
+- 无反馈 → `uncertain_case`
+- 高评分反馈 + 有根因 + 耗时合理 → `positive_case`（score ≥ 0.75）
+- 无根因 + 负反馈 + 复发 + 超时 → `negative_case`（score ≤ 0.45）
+- `metric_recovery` 支持布尔值、0-1 浮点、before/after 数值三种格式
 
-### 8.1 模式挖掘器
+## 8. 第四阶段：模式挖掘与候选生成（V0.2 已完成）
+
+### 8.1 模式挖掘器（V0.2 已完成）
 
 文件：`server/evolution/pattern_miner.py`
 
-函数签名：
+入口函数：`mine_patterns(min_cases=3, save=True) -> List[Dict]`
 
-```python
-def mine_patterns(start_time=None, end_time=None, min_cases: int = 3) -> list[dict]:
-    """从 evolution_cases 中挖掘缺失知识、错误工具选择、提示词缺陷等模式。"""
-```
+V0.2 实现了四条规则（全部不依赖机器学习，零外部依赖）：
 
-第一版不需要复杂机器学习，先做规则挖掘：
+| 规则 | 触发条件 | 输出模式 | 置信度范围 |
+| --- | --- | --- | --- |
+| `missing_knowledge` | 同异常类型中 knowledge_chunks_used=0 的案例 ≥ min_cases | 知识空洞 | 0.50 ~ 0.95 |
+| `wrong_tool_selection` | 慢 SQL 类案例未调用 explain_query/index 工具 ≥ min_cases | 工具缺失 | 0.50 ~ 0.90 |
+| `low_confidence_prompt` | 有工具调用但根因置信度 < 0.5 的案例 ≥ min_cases | 提示词缺陷 | 0.40 ~ 0.85 |
+| `retrieval_weight_issue` | BM25 与向量分数差值 > 0.3 的案例 ≥ min_cases | 检索权重失衡 | 0.40 ~ 0.80 |
 
-| 模式 | 触发条件 | 输出 |
-| --- | --- | --- |
-| `missing_knowledge` | 同异常簇低分案例 >= 3 且 `knowledge_chunks_used == 0` | 生成知识补丁候选 |
-| `wrong_tool_selection` | 慢 SQL 案例未调用 `explain_query` 或索引工具 | 生成工具策略候选 |
-| `low_confidence_prompt` | 有工具证据但根因置信度持续低 | 生成提示词补丁候选 |
-| `retrieval_weight_issue` | BM25 命中低、向量命中高，或反之 | 生成检索策略候选 |
+每条模式包含：`evidence_case_ids`、`failure_signature`、`confidence`、`suggested_update_type`。
 
-### 8.2 候选生成器
+### 8.2 候选生成器（V0.2 已完成）
 
 文件：`server/evolution/candidate_generator.py`
 
-函数签名：
+入口函数：
+- `generate_candidates_from_pattern(pattern, save=True) -> List[Dict]`
+- `generate_all_candidates(patterns, save=True) -> List[Dict]`
 
-```python
-def generate_candidates_from_pattern(pattern: dict) -> list[dict]:
-    """根据模式生成知识、检索、工具或提示词候选补丁。"""
-```
+每种模式对应的候选类型：
 
-候选内容格式：
+| 模式类型 | 候选类型 | 目标资产 | 风险等级 |
+| --- | --- | --- | --- |
+| `missing_knowledge` | `knowledge_patch` | knowledge | low |
+| `wrong_tool_selection` | `tool_strategy_patch` | tool_policy | medium |
+| `low_confidence_prompt` | `prompt_patch` | prompt | medium |
+| `retrieval_weight_issue` | `retrieval_strategy_patch` | retrieval_policy | low |
 
-```json
-{
-  "candidate_type": "knowledge_patch",
-  "target_artifact_type": "knowledge",
-  "risk_level": "low",
-  "patch_content": {
-    "operation": "add",
-    "knowledge_block": {
-      "cause_name": "missing_index_slow_query",
-      "description": "当慢 SQL 扫描大量行且过滤列无索引时，优先检查缺失索引。",
-      "metrics": ["slow_query_time", "rows_scanned", "idx_scan"],
-      "steps": ["检查执行计划", "确认过滤列", "评估候选索引"]
-    }
-  },
-  "evidence_case_ids": [101, 118, 132]
-}
-```
+所有候选默认 `status="pending"`，不影响线上诊断。候选的 `patch_content` 包含完整的操作描述、证据摘要和应用建议。
 
 ## 9. 第五阶段：沙盒回放、门控与版本注册
 
@@ -535,65 +387,32 @@ def get_active_artifact_versions() -> dict:
 
 文件：`server/evolution/api.py`
 
-接口函数：
+### V0.1 已实现接口
 
-```python
-from server.utils import BaseResponse
+| API | 方法 | 用途 | 状态 |
+| --- | --- | --- | --- |
+| `/evolution/cases` | GET | 查看自进化案例池（支持 label/status/anomaly_type 过滤、分页） | ✅ 已完成 |
+| `/evolution/cases/{case_id}` | GET | 查看单个案例详情及其反馈列表 | ✅ 已完成 |
+| `/evolution/metrics` | GET | 查看自进化收益指标（案例数、反馈数、平均评分、标签分布） | ✅ 已完成 |
+| `/evolution/feedback` | POST | 提交用户反馈，自动触发评分更新 | ✅ 已完成 |
 
+### V0.2 已实现接口
 
-def list_evolution_cases(limit: int = 20, offset: int = 0, label: str = None):
-    ...
+| API | 方法 | 用途 | 状态 |
+| --- | --- | --- | --- |
+| `/evolution/patterns` | GET | 查看挖掘出的模式列表（支持 pattern_type/status 过滤、分页） | ✅ 已完成 |
+| `/evolution/candidates` | GET | 查看候选更新列表（支持 candidate_type/status/risk_level 过滤） | ✅ 已完成 |
+| `/evolution/candidates/generate` | POST | 触发模式挖掘 + 候选生成，结果持久化并返回摘要 | ✅ 已完成 |
 
+### V0.3 待实现接口
 
-def get_evolution_metrics():
-    ...
+| API | 方法 | 用途 | 阶段 |
+| --- | --- | --- | --- |
+| `/evolution/replay/{candidate_id}` | POST | 触发候选沙盒回放 | V0.3 |
+| `/evolution/promote/{candidate_id}` | POST | 发布通过门控的候选 | V0.3 |
+| `/evolution/rollback/{artifact_type}/{version}` | POST | 回滚指定类型资产到历史版本 | V0.3 |
 
-
-def generate_evolution_candidates(start_time: str = None, end_time: str = None):
-    ...
-
-
-def replay_evolution_candidate(candidate_id: int):
-    ...
-
-
-def promote_evolution_candidate(candidate_id: int):
-    ...
-
-
-def rollback_evolution_artifact(artifact_type: str, version: str):
-    ...
-```
-
-修改文件：`server/api.py`
-
-新增挂载函数：
-
-```python
-def mount_evolution_routes(app: FastAPI):
-    try:
-        from server.evolution.api import (
-            list_evolution_cases, get_evolution_metrics,
-            generate_evolution_candidates, replay_evolution_candidate,
-            promote_evolution_candidate, rollback_evolution_artifact,
-        )
-        app.get("/evolution/cases", tags=["Evolution"])(list_evolution_cases)
-        app.get("/evolution/metrics", tags=["Evolution"])(get_evolution_metrics)
-        app.post("/evolution/candidates/generate", tags=["Evolution"])(generate_evolution_candidates)
-        app.post("/evolution/replay/{candidate_id}", tags=["Evolution"])(replay_evolution_candidate)
-        app.post("/evolution/promote/{candidate_id}", tags=["Evolution"])(promote_evolution_candidate)
-        app.post("/evolution/rollback/{artifact_type}/{version}", tags=["Evolution"])(rollback_evolution_artifact)
-    except Exception as e:
-        logger.warning(f"Failed to mount evolution routes: {e}")
-```
-
-在 `mount_app_routes()` 中追加：
-
-```python
-mount_evolution_routes(app)
-```
-
-注意路由顺序：固定路径要放在动态路径前，避免类似 `/api/testcases/statistics` 被动态参数吞掉的问题。
+> **路由顺序提示**：固定路径必须注册在动态路径（带 `{param}` 的路由）之前，否则固定路径会被动态参数吞掉。FastAPI 按注册顺序匹配路由，已修复 `/api/testcases/statistics` 在 `/{case_id}` 之前的问题。
 
 ## 11. 第七阶段：前端开发
 
@@ -632,64 +451,54 @@ export const evolutionAPI = {
 
 ## 12. 测试流程
 
-### 12.1 单元测试
+### 12.1 单元测试（当前共 41 个，全部通过）
 
-建议测试文件：
+| 测试文件 | 测试数 | 覆盖内容 | 状态 |
+| --- | --- | --- | --- |
+| `test_evolution_collector.py` | 4 | sanitize_snapshot 脱敏截断、指纹稳定性、快照提取、不可序列化容错 | ✅ V0.1 |
+| `test_evolution_evaluator.py` | 4 | 无反馈保持不确定、正负案例边界、metric_recovery 三种格式 | ✅ V0.1 |
+| `test_evolution_api.py` | 5 | 案例列表/详情/指标/反馈、诊断集成（含 evolution_case_id） | ✅ V0.1 |
+| `test_evolution_pattern_miner.py` | 18 | 四种规则的触发/不触发/边界、DB 保存、DB 异常容错 | ✅ V0.2 |
+| `test_evolution_candidate_generator.py` | 10 | 四种候选生成、未知类型跳过、save=False、多模式批量 | ✅ V0.2 |
+| `test_evolution_gatekeeper.py` | — | 门控规则、回归拒绝、高风险拦截 | ⬜ V0.3 待补充 |
 
-```text
-tests/unit/test_evolution_collector.py
-tests/unit/test_evolution_evaluator.py
-tests/unit/test_evolution_api.py
-tests/unit/test_evolution_gatekeeper.py
-```
-
-测试重点：
-
-- 采集器能从诊断结果中抽取 `reasoning_steps`、`root_causes`、`solutions`。
-- 空字段不会导致采集失败。
-- 评分公式边界值正确。
-- 候选门控对准确率回退、高风险候选、回归案例能正确拒绝。
-- API 返回 `BaseResponse` 风格：`code`, `msg`, `data`。
-
-运行：
+运行全部：
 
 ```bash
-python -m pytest tests/unit/test_evolution_collector.py
-python -m pytest tests/unit/test_evolution_evaluator.py
-python -m pytest tests/unit/test_evolution_api.py
+python -m pytest tests/unit/ -v --basetemp=.pytest_tmp
 ```
 
-### 12.2 集成测试
+### 12.2 集成测试（已通过）
 
-建议场景：
+`TestEvolutionDiagnosisIntegration`（在 `test_evolution_api.py` 中）：
 
-1. Mock `run_tree_search_diagnosis()` 返回固定诊断结果。
+1. Mock `run_tree_search_diagnosis()` 和 `_save_diagnosis_to_database()` 返回固定结果。
 2. 调用 `/diagnose/quick`。
-3. 确认返回中包含 `record_id` 和 `evolution_case_id`。
-4. 调用 `/evolution/cases` 能看到该案例。
-5. 调用 `/evolution/candidates/generate` 能生成候选。
+3. 断言返回中包含 `record_id=101` 和 `evolution_case_id=202`。
 
-### 12.3 手动验收
+### 12.3 手动验收演示流程
 
 启动后端：
 
 ```bash
-python run_server.py
+python server/api.py --port 7861
+# 或
+start_backend.bat
 ```
 
-访问：
+访问 Swagger：`http://localhost:7861/docs`
 
-```text
-http://localhost:7861/docs
-```
+**完整演示步骤（V0.1 + V0.2）：**
 
-手动检查：
-
-- `/diagnose/quick`
-- `/evolution/cases`
-- `/evolution/metrics`
-- `/evolution/candidates/generate`
-- `/evolution/replay/{candidate_id}`
+| 步骤 | 接口 | 说明 |
+| --- | --- | --- |
+| 1 | `POST /diagnose/quick` | 提交诊断请求，返回 `evolution_case_id` |
+| 2 | `POST /evolution/feedback` | 提交负反馈（score=10, accepted=false） |
+| 3 | `GET /evolution/cases` | 确认 label 更新为 `negative_case` |
+| 4 | `POST /evolution/candidates/generate?min_cases=1` | 触发挖掘（min_cases=1 便于演示单案例） |
+| 5 | `GET /evolution/patterns` | 查看挖掘出的模式和置信度 |
+| 6 | `GET /evolution/candidates` | 查看生成的候选补丁内容 |
+| 7 | `GET /evolution/metrics` | 查看完整统计（案例/反馈/模式/候选数量） |
 
 ## 13. 代码审查清单
 
@@ -773,15 +582,23 @@ SunDB AI-Ops 自进化智能诊断优化软件 V1.0
 
 ## 16. 完成定义
 
-V1.0 完成标准：
+**当前状态（V0.2 完成）：**
 
-- 后端存在独立 `server/evolution/` 模块。
-- 每次 `/diagnose/quick` 成功后能生成 `evolution_case`。
-- 用户反馈能写入 `evolution_feedback`。
-- 系统能生成至少一种候选补丁：建议从 `knowledge_patch` 开始。
-- 至少支持一次离线回放和门控判断。
-- 至少支持一个资产版本发布和回滚。
-- 单元测试覆盖采集器、评分器、API、门控。
+| 完成标准 | 状态 |
+| --- | --- |
+| 后端存在独立 `server/evolution/` 模块 | ✅ |
+| 每次 `/diagnose/quick` 成功后能生成 `evolution_case` | ✅ |
+| 用户反馈能写入 `evolution_feedback` 并触发评分更新 | ✅ |
+| 系统能从负/不确定案例挖掘出四种模式（带置信度和证据链） | ✅ |
+| 每种模式能生成带 `patch_content` 的候选补丁记录 | ✅ |
+| 所有候选默认 `pending`，不影响线上诊断 | ✅ |
+| 单元测试覆盖采集器、评分器、API、模式挖掘、候选生成（共 41 个） | ✅ |
+
+**V1.0 剩余完成标准（V0.3 + V1.0 待开发）：**
+
+- 至少支持一次离线回放（`replay_runner.py`）和门控判断（`gatekeeper.py`）。
+- 至少支持一个资产版本发布和回滚（`registry.py`）。
+- 单元测试覆盖门控（`test_evolution_gatekeeper.py`）。
 - 已形成软著材料包目录。
 - 已形成专利交底材料初稿。
 
