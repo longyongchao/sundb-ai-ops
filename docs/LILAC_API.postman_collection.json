@@ -1,0 +1,349 @@
+{
+  "info": {
+    "name": "LILAC Log Parsing API",
+    "description": "LILAC (Log Inference with Leveraged Adaptive Caching) 日志模板提取引擎 REST API\n\n后端地址: http://localhost:7861\n\n启动命令:\n```\nLILAC_ENABLE_LLM=false python3 run_server.py\n```\n\n处理流水线: 调用方 regex → 内置 MASK_PATTERNS → Cache → Drain3/LLM",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:7861",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Parse File",
+      "item": [
+        {
+          "name": "POST /diagnose/lilac/parse — 上传日志文件解析",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "任意日志文件 (.log, .trc, .txt 等)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/parse",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "parse"]
+            },
+            "description": "上传任意日志文件，LILAC 自动识别格式并解析。\n\n支持格式:\n- SunDB system.trc / listener.trc\n- 通用日志 (syslog, ISO8601 等)\n- 纯文本 (每行一条日志)\n\n**响应字段:**\n- total_entries: 解析条目数\n- cache_hits: 缓存命中数\n- drain3_fallbacks: Drain3 处理数\n- llm_calls: LLM 调用数\n- entries: 解析结果列表"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"filename\": \"system.trc\",\n    \"total_entries\": 100,\n    \"cache_hits\": 85,\n    \"llm_calls\": 0,\n    \"drain3_fallbacks\": 15,\n    \"parse_time_ms\": 234.5,\n    \"entries\": [\n      {\n        \"timestamp\": \"2024-03-12 15:49:05\",\n        \"level\": \"INFORMATION\",\n        \"message\": \"Database started successfully\",\n        \"raw_text\": \"[2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION] Database started successfully\",\n        \"template\": \"Database started successfully\",\n        \"template_source\": \"cache\",\n        \"parameters\": {}\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Parse Text",
+      "item": [
+        {
+          "name": "POST /diagnose/lilac/parse_text — 基础文本解析",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Connection from 192.168.1.100 port 22\\nConnection from 10.0.0.5 port 22\\nFailed password for root from 172.16.0.1 port 48234\"\n}",
+              "options": {
+                "raw": {"language": "json"}
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/parse_text",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            },
+            "description": "直接提交日志文本解析（多行用 \\n 分隔）。\n\n**参数:**\n- text (必填): 日志文本\n- source_file (可选): 来源文件名\n- regex (可选): 自定义正则预处理规则\n\n适合批量处理，每批建议 1,000~10,000 行。"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"total_entries\": 3,\n    \"cache_hits\": 2,\n    \"llm_calls\": 0,\n    \"drain3_fallbacks\": 1,\n    \"parse_time_ms\": 15.2,\n    \"entries\": [\n      {\n        \"timestamp\": null,\n        \"level\": null,\n        \"message\": \"Connection from <*> port <*>\",\n        \"template\": \"Connection from <*> port <*>\",\n        \"template_source\": \"drain3\",\n        \"parameters\": [\"192.168.1.100\", \"22\"]\n      },\n      {\n        \"timestamp\": null,\n        \"level\": null,\n        \"message\": \"Connection from <*> port <*>\",\n        \"template\": \"Connection from <*> port <*>\",\n        \"template_source\": \"cache\",\n        \"parameters\": [\"10.0.0.5\", \"22\"]\n      },\n      {\n        \"timestamp\": null,\n        \"level\": null,\n        \"message\": \"Failed password for root from <*> port <*>\",\n        \"template\": \"Failed password for root from <*> port <*>\",\n        \"template_source\": \"drain3\",\n        \"parameters\": [\"172.16.0.1\", \"48234\"]\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /diagnose/lilac/parse_text — 带自定义 regex",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"081109 203518 148 INFO dfs.DataNode$PacketResponder: Received block blk_-1608999687919862906 of size 67108864 from /10.251.73.220\\n081109 203518 149 INFO dfs.DataNode$PacketResponder: PacketResponder 1 for block blk_38865049064139660 terminating\",\n  \"regex\": [\n    {\"pattern\": \"blk_-?\\\\d+\", \"replacement\": \"<*>\"},\n    {\"pattern\": \"(\\\\d+\\\\.){3}\\\\d+\", \"replacement\": \"<*>\"}\n  ]\n}",
+              "options": {
+                "raw": {"language": "json"}
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/parse_text",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            },
+            "description": "带调用方自定义 regex 的文本解析。\n\n**regex 参数格式:**\n每项包含:\n- pattern (必填): 正则表达式\n- replacement (可选): 替换文本，默认 \"<*>\"\n\n**处理顺序:** 调用方 regex → 内置 MASK_PATTERNS → Cache/Drain3/LLM\n\n**常用 regex 模板:**\n- HDFS: blk_-?\\d+, (\\d+\\.){3}\\d+\n- Hadoop: (\\d+\\.){3}\\d+\n- OpenStack: (\\d+\\.){3}\\d+(:\\d+)?\n- Proxifier: [\\w.-]+\\.\\w{2,}(:\\d+)?"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"total_entries\": 2,\n    \"cache_hits\": 1,\n    \"llm_calls\": 0,\n    \"drain3_fallbacks\": 1,\n    \"parse_time_ms\": 8.7,\n    \"entries\": [\n      {\n        \"timestamp\": null,\n        \"level\": null,\n        \"message\": \"Received block <*> of size <*> from <*>\",\n        \"template\": \"Received block <*> of size <*> from <*>\",\n        \"template_source\": \"drain3\",\n        \"parameters\": [\"blk_-1608999687919862906\", \"67108864\", \"/10.251.73.220\"]\n      },\n      {\n        \"timestamp\": null,\n        \"level\": null,\n        \"message\": \"PacketResponder <*> for block <*> terminating\",\n        \"template\": \"PacketResponder <*> for block <*> terminating\",\n        \"template_source\": \"cache\",\n        \"parameters\": [\"1\", \"blk_38865049064139660\"]\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /diagnose/lilac/parse_text — 带 source_file",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"[2024-03-12 15:49:05.591941 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [INFORMATION] Database started successfully\\n[2024-03-12 15:49:06.123456 INSTANCE(G1N1) THREAD(2586375,281464209690016)] [WARNING] Undo tablespace usage at 85%\",\n  \"source_file\": \"system.trc\"\n}",
+              "options": {
+                "raw": {"language": "json"}
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/parse_text",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            },
+            "description": "SunDB 日志文本解析（LILAC 自动识别 SunDB header 格式）。\n\nsource_file 参数仅作为来源标记，不影响解析逻辑。"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"total_entries\": 2,\n    \"cache_hits\": 1,\n    \"llm_calls\": 0,\n    \"drain3_fallbacks\": 1,\n    \"parse_time_ms\": 12.1,\n    \"entries\": [\n      {\n        \"timestamp\": \"2024-03-12 15:49:05\",\n        \"level\": \"INFORMATION\",\n        \"message\": \"Database started successfully\",\n        \"template\": \"Database started successfully\",\n        \"template_source\": \"drain3\",\n        \"parameters\": {}\n      },\n      {\n        \"timestamp\": \"2024-03-12 15:49:06\",\n        \"level\": \"WARNING\",\n        \"message\": \"Undo tablespace usage at 85%\",\n        \"template\": \"Undo tablespace usage at <*>%\",\n        \"template_source\": \"cache\",\n        \"parameters\": {\"0\": \"85\"}\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Cache Management",
+      "item": [
+        {
+          "name": "GET /diagnose/lilac/cache/stats — 缓存统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            },
+            "description": "获取缓存命中率统计。\n\n可用于:\n- 确认服务是否就绪\n- 监控 cache 效果\n- 评测后查看总体命中情况"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"total_templates\": 46,\n    \"total_hits\": 638901\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /diagnose/lilac/cache/templates — 查看缓存模板",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache/templates?limit=20&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache", "templates"],
+              "query": [
+                {"key": "limit", "value": "20", "description": "返回模板数上限 (默认 100)"},
+                {"key": "offset", "value": "0", "description": "偏移量 (默认 0)"}
+              ]
+            },
+            "description": "查看已缓存的模板列表，按命中次数降序排列。\n\n支持分页参数 limit/offset。"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"total\": 46,\n    \"returned\": 20,\n    \"templates\": [\n      {\n        \"template_id\": 1,\n        \"template_str\": \"Connection from <*> port <*>\",\n        \"hit_count\": 15230,\n        \"source\": \"drain3\",\n        \"created_at\": \"2026-06-02T10:30:00\"\n      },\n      {\n        \"template_id\": 2,\n        \"template_str\": \"Failed password for <*> from <*> port <*>\",\n        \"hit_count\": 8420,\n        \"source\": \"drain3\",\n        \"created_at\": \"2026-06-02T10:30:01\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE /diagnose/lilac/cache — 清空缓存",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache"]
+            },
+            "description": "清空所有已缓存的模板。\n\n适用场景:\n- Benchmark 评测前确保公平起点\n- 切换 regex 规则后需要重新学习\n- 调试时重置状态"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"缓存已清空\",\n  \"data\": null\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Seed Templates",
+      "item": [
+        {
+          "name": "POST /diagnose/lilac/seed — 种子模板生成",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sample_dir\": \"/data/sundb_samples/\"\n}",
+              "options": {
+                "raw": {"language": "json"}
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/seed",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "seed"]
+            },
+            "description": "从 SunDB 样本日志目录预生成模板种子。\n\n用于冷启动优化: 预先从已知日志中提取模板并存入 cache，新日志到来时直接命中，减少 Drain3/LLM 调用。\n\n**参数:**\n- sample_dir: SunDB 样本日志目录路径 (服务端文件系统路径)"
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {"key": "Content-Type", "value": "application/json"}
+              ],
+              "body": "{\n  \"code\": 200,\n  \"msg\": \"Success\",\n  \"data\": {\n    \"templates_added\": 42,\n    \"sample_dir\": \"/data/sundb_samples/\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Workflow: Benchmark 评测流程",
+      "item": [
+        {
+          "name": "Step 1: 确认服务就绪",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            },
+            "description": "确认 LILAC 服务已启动。\n\n预期返回 code=200。"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 2: 清空缓存",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache"]
+            },
+            "description": "评测前清空缓存确保公平起点。"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 3: 批量解析日志",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"line1 of log content\\nline2 of log content\\nline3 of log content\\n...\",\n  \"regex\": [\n    {\"pattern\": \"(\\\\d+\\\\.){3}\\\\d+\", \"replacement\": \"<*>\"}\n  ]\n}",
+              "options": {
+                "raw": {"language": "json"}
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/parse_text",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "parse_text"]
+            },
+            "description": "批量发送日志文本（每批 1,000~10,000 行）。\n\n重复调用此接口完成全部数据，cache 在批次间持续积累。"
+          },
+          "response": []
+        },
+        {
+          "name": "Step 4: 查看最终缓存统计",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/diagnose/lilac/cache/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["diagnose", "lilac", "cache", "stats"]
+            },
+            "description": "评测结束后查看 cache 效果。\n\n预期 total_hits 远大于 total_templates，说明缓存有效运作。"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
