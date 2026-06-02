@@ -4,6 +4,7 @@
     python -m benchmark.runner --mode 2k --datasets all --no-llm
     python -m benchmark.runner --mode 2k --datasets Hadoop,HDFS --enable-llm
     python -m benchmark.runner --mode full --datasets all --enable-llm --reset-cache
+    python -m benchmark.runner --mode 2k --datasets all --via-api --no-llm
 """
 
 import argparse
@@ -51,6 +52,23 @@ def parse_args():
         default=0.85,
         help="LILAC cache 相似度阈值 (default: 0.85)",
     )
+    parser.add_argument(
+        "--via-api",
+        action="store_true",
+        default=False,
+        help="通过 HTTP API 调用 LILAC 服务（评测生产环境行为）",
+    )
+    parser.add_argument(
+        "--api-base",
+        default="http://localhost:7861",
+        help="LILAC API 地址 (default: http://localhost:7861)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10000,
+        help="API 模式每批发送行数 (default: 10000)",
+    )
     return parser.parse_args()
 
 
@@ -73,6 +91,8 @@ def run_benchmark(args):
     enable_llm = args.enable_llm and not args.no_llm
     enable_drain3 = not args.no_drain3
     mode_label = "llm" if enable_llm else "nollm"
+    if args.via_api:
+        mode_label = f"api_{mode_label}"
 
     datasets = get_datasets(args)
     results: List[EvalResult] = []
@@ -81,7 +101,7 @@ def run_benchmark(args):
     print(f"\n{'='*60}")
     print(f"  LILAC Loghub-2.0 Benchmark")
     print(f"  Mode: {args.mode} | LLM: {enable_llm} | Drain3: {enable_drain3}")
-    print(f"  Datasets: {len(datasets)} | Similarity: {args.similarity_threshold}")
+    print(f"  Via API: {args.via_api} | Datasets: {len(datasets)} | Similarity: {args.similarity_threshold}")
     print(f"{'='*60}\n")
 
     for dataset in datasets:
@@ -109,18 +129,31 @@ def run_benchmark(args):
         log_name = os.path.basename(log_file)
         result_dir = os.path.join(output_dir, f"lilac_{mode_label}_{args.mode}")
 
-        adapter = LilacLoghubAdapter(
-            log_format=setting["log_format"],
-            indir=indir,
-            outdir=result_dir,
-            rex=setting["regex"],
-            cache_db_path=cache_path,
-            enable_llm=enable_llm,
-            enable_drain3=enable_drain3,
-            similarity_threshold=args.similarity_threshold,
-            drain_depth=setting.get("depth", 4),
-            drain_sim_th=setting.get("st", 0.5),
-        )
+        if args.via_api:
+            from benchmark.lilac_api_adapter import LilacApiAdapter
+
+            adapter = LilacApiAdapter(
+                log_format=setting["log_format"],
+                indir=indir,
+                outdir=result_dir,
+                rex=setting["regex"],
+                api_base=args.api_base,
+                batch_size=args.batch_size,
+                reset_cache=args.reset_cache,
+            )
+        else:
+            adapter = LilacLoghubAdapter(
+                log_format=setting["log_format"],
+                indir=indir,
+                outdir=result_dir,
+                rex=setting["regex"],
+                cache_db_path=cache_path,
+                enable_llm=enable_llm,
+                enable_drain3=enable_drain3,
+                similarity_threshold=args.similarity_threshold,
+                drain_depth=setting.get("depth", 4),
+                drain_sim_th=setting.get("st", 0.5),
+            )
 
         try:
             adapter.parse(log_name)
@@ -147,6 +180,44 @@ def run_benchmark(args):
                 print(
                     f" | GA={result.ga:.3f} PA={result.pa:.3f} FTA={result.fta:.3f}"
                 )
+                # 每个数据集单独保存 JSON（含详细统计）
+                per_ds_dir = os.path.join(output_dir, f"per_dataset_{mode_label}_{args.mode}")
+                os.makedirs(per_ds_dir, exist_ok=True)
+                per_ds_path = os.path.join(per_ds_dir, f"{dataset}.json")
+                file_size_bytes = os.path.getsize(log_path)
+                lines_per_sec = result.n_logs / elapsed if elapsed > 0 else 0
+                import pandas as pd_check
+                parsed_df = pd_check.read_csv(structured_csv)
+                detail = {
+                    **asdict(result),
+                    "time_s": round(elapsed, 2),
+                    "file_size_bytes": file_size_bytes,
+                    "file_size_mb": round(file_size_bytes / 1048576, 2),
+                    "lines_per_sec": round(lines_per_sec, 1),
+                    "avg_log_length": round(parsed_df["Content"].astype(str).str.len().mean(), 1),
+                    "max_log_length": int(parsed_df["Content"].astype(str).str.len().max()),
+                    "min_log_length": int(parsed_df["Content"].astype(str).str.len().min()),
+                    "template_ratio": round(result.n_templates_parsed / result.n_logs, 6) if result.n_logs > 0 else 0,
+                    "over_parsed": result.n_templates_parsed - result.n_templates_truth,
+                    "drain_depth": setting.get("depth", 4),
+                    "drain_sim_th": setting.get("st", 0.5),
+                    "mode": args.mode,
+                    "llm_enabled": enable_llm,
+                    "via_api": args.via_api,
+                }
+                if args.via_api:
+                    detail["cache_hits"] = adapter.total_cache_hits
+                    detail["drain3_fallbacks"] = adapter.total_drain3_fallbacks
+                    detail["llm_calls"] = adapter.total_llm_calls
+                    detail["batch_size"] = args.batch_size
+                with open(per_ds_path, "w") as f:
+                    json.dump(detail, f, indent=2, ensure_ascii=False)
+                # 大文件评测完成后删除中间 CSV 释放磁盘空间
+                if result.n_logs > 500000:
+                    templates_csv = os.path.join(result_dir, f"{log_name}_templates.csv")
+                    for f_path in [structured_csv, templates_csv]:
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
             except Exception as e:
                 print(f" | Eval error: {e}")
         else:
