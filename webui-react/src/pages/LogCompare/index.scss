@@ -60,7 +60,7 @@
       background: rgba(0, 20, 40, 0.95) !important;
     }
 
-    // "原始 CSV 数据" 分组头
+    // "原始 CSV 数据" / "原始日志行" 分组头
     .ant-table-thead > tr:first-child > th:nth-child(2) {
       background: rgba(0, 40, 70, 0.95) !important;
       color: #13c2c2;
@@ -205,12 +205,20 @@
     }
   }
 
-  // ── 准确率面板 ───────────────────────────────────────────
+  // ── 准确率面板 / 提取完整度面板 ─────────────────────────
   .accuracy-card {
     .accuracy-item {
       padding: 4px 0;
       cursor: default;
     }
+  }
+
+  // ── 日志模式：解析质量汇总 ───────────────────────────────
+  .log-quality-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .mismatch-text { color: #ff7875; }

@@ -9,7 +9,7 @@ import {
   CheckCircleOutlined, WarningOutlined, CloseCircleOutlined,
   ClockCircleOutlined, ThunderboltOutlined, DatabaseOutlined,
   ReloadOutlined, TableOutlined, BarChartOutlined,
-  CheckOutlined, CloseOutlined, PlayCircleOutlined,
+  CheckOutlined, CloseOutlined, PlayCircleOutlined, CodeOutlined,
 } from '@ant-design/icons'
 import { lilacAPI } from '@/utils/api'
 import './index.scss'
@@ -121,7 +121,6 @@ function parseCSV(text) {
 }
 
 // ── 后端 field_checks 适配（服务端统一计算准确率，前端仅展示） ──────────
-// 将后端 field_checks[i].checks 转为前端 FieldDetailTable 需要的格式
 function adaptBackendChecks(backendChecks) {
   if (!backendChecks) return []
   return backendChecks.map(c => ({
@@ -136,6 +135,17 @@ function adaptBackendChecks(backendChecks) {
       : c.match ? '匹配成功'
       : `期望: ${c.expected}，实际: ${c.parsed}`,
   }))
+}
+
+// ── 非 CSV 日志行质量判断 ─────────────────────────────────────────────
+function getLogEntryQuality(entry) {
+  if (!entry) return 'bad'
+  const hasMsg = !!(entry.message)
+  const hasTs  = !!(entry.timestamp)
+  const hasLv  = !!(entry.level)
+  if (hasMsg && hasTs && hasLv) return 'good'
+  if (hasMsg) return 'warn'
+  return 'bad'
 }
 
 // ── UI 工具 ───────────────────────────────────────────────────────────
@@ -157,7 +167,7 @@ function RoleBadge({ role }) {
     background:cfg.color+'33', color:cfg.color, border:`1px solid ${cfg.color}66`, marginLeft:4 }}>{cfg.label}</span>
 }
 
-// ── 行展开：字段详情表 ────────────────────────────────────────────────
+// ── 行展开：字段详情表（CSV 模式） ────────────────────────────────────
 function FieldDetailTable({ checks }) {
   const cols = [
     { title: '列名', dataIndex: 'col', key: 'col', width: 200,
@@ -185,7 +195,91 @@ function FieldDetailTable({ checks }) {
   )
 }
 
-// ── 转换保真度面板（使用后端统一计算的 accuracy） ─────────────────────
+// ── 行展开：日志条目字段详情表（非 CSV 模式） ─────────────────────────
+function LogEntryFieldTable({ entry }) {
+  if (!entry) return null
+
+  const EXTRACT_CFG = [
+    { field: 'timestamp', label: '时间戳', color: '#13c2c2', role: 'timestamp' },
+    { field: 'level',     label: '日志级别', color: '#722ed1', role: 'level' },
+    { field: 'message',   label: '消息体', color: '#1677ff', role: 'message' },
+    { field: 'template',  label: '模板',   color: '#eb2f96', role: 'template' },
+  ]
+
+  const rows = EXTRACT_CFG.map(cfg => {
+    const val = entry[cfg.field]
+    const extracted = !!(val)
+    const isTemplate = cfg.field === 'template'
+    const hasVar = isTemplate && val?.includes('<*>')
+    return {
+      key: cfg.field,
+      field: cfg.field,
+      label: cfg.label,
+      color: cfg.color,
+      role: cfg.role,
+      value: val || '',
+      extracted,
+      extra: isTemplate ? (hasVar ? '含变量 <*>' : '纯静态模板') : null,
+      match: extracted ? true : null,
+    }
+  })
+
+  const cols = [
+    { title: '字段', dataIndex: 'label', key: 'label', width: 110,
+      render: (v, r) => (
+        <span>
+          <code style={{ color: r.color }}>{v}</code>
+          <RoleBadge role={r.role} />
+        </span>
+      ) },
+    { title: '提取值', dataIndex: 'value', key: 'value', ellipsis: true,
+      render: (v, r) => v
+        ? <code className={`field-val ${r.field === 'timestamp' ? 'expected-val' : ''}`}>{v}</code>
+        : <span className="empty-cell">（未提取）</span> },
+    { title: '状态', key: 'status', width: 130, align: 'center',
+      render: (_, r) => {
+        if (r.match === null)
+          return <Tag style={{ fontSize: 11 }} color="default">未提取</Tag>
+        if (r.extra)
+          return <Tag style={{ fontSize: 11 }} color={r.extra.includes('变量') ? 'green' : 'orange'}>{r.extra}</Tag>
+        return <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+      } },
+  ]
+
+  const hasParams = entry.parameters?.length > 0
+  const hasMeta   = entry.metadata && Object.keys(entry.metadata).length > 0
+
+  return (
+    <div className="entry-detail">
+      <Table
+        className="field-detail-table"
+        dataSource={rows}
+        columns={cols}
+        pagination={false}
+        size="small"
+        bordered={false}
+      />
+      {hasParams && (
+        <div style={{ marginTop: 10 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>提取参数</Text>
+          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.parameters, null, 2)}</pre>
+        </div>
+      )}
+      {hasMeta && (
+        <div style={{ marginTop: 10 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>元数据</Text>
+          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.metadata, null, 2)}</pre>
+        </div>
+      )}
+      <div style={{ marginTop: 10 }}>
+        <Text type="secondary" style={{ fontSize: 11 }}>原始文本</Text>
+        <pre className="field-val entry-detail-pre">{entry.raw_text || '—'}</pre>
+      </div>
+    </div>
+  )
+}
+
+// ── 转换保真度面板（CSV 模式，使用后端统一计算的 accuracy） ─────────────
 function AccuracyPanel({ accuracy, schema }) {
   if (!accuracy) return null
   const getStatus = p => p === null ? null : p >= 95 ? 'good' : p >= 80 ? 'warn' : 'bad'
@@ -242,32 +336,72 @@ function AccuracyPanel({ accuracy, schema }) {
   )
 }
 
-// ── 日志条目详情（非 CSV 模式展开） ───────────────────────────────────
-function EntryDetailTable({ entry }) {
-  if (!entry) return null
+// ── 提取完整度面板（非 CSV 模式，展示各字段提取率） ───────────────────
+function LogCompletenessPanel({ entries }) {
+  if (!entries?.length) return null
+  const n = entries.length
+  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : null
+
+  const withTs     = entries.filter(e => e.timestamp).length
+  const withLv     = entries.filter(e => e.level).length
+  const withMsg    = entries.filter(e => e.message).length
+  const withTpl    = entries.filter(e => e.template?.includes('<*>')).length
+  const withParams = entries.filter(e => e.parameters?.length > 0).length
+  const withMeta   = entries.filter(e => e.metadata && Object.keys(e.metadata).length > 0).length
+
+  const getStatus = p => p === null ? null : p >= 95 ? 'good' : p >= 80 ? 'warn' : 'bad'
+  const statusStyle = { good:{color:'#52c41a',label:'优秀'}, warn:{color:'#faad14',label:'良好'}, bad:{color:'#ff4d4f',label:'需关注'} }
+
+  const items = [
+    { label: '时间戳提取率',  pct: pct(withTs, n),     desc: `${withTs}/${n} 行提取到时间戳`,     stroke: '#13c2c2',
+      tip: '成功从原始日志行解析出时间戳字段的比例' },
+    { label: '级别识别率',    pct: pct(withLv, n),     desc: `${withLv}/${n} 行识别到日志级别`,   stroke: '#722ed1',
+      tip: '成功识别 INFO/WARNING/ERROR 等日志级别的行占比' },
+    { label: '消息体提取率',  pct: pct(withMsg, n),    desc: `${withMsg}/${n} 行提取到消息体`,    stroke: '#1677ff',
+      tip: '成功提取到日志主体消息内容的行占比' },
+    { label: '变量模板覆盖率',pct: pct(withTpl, n),    desc: `${withTpl}/${n} 行含 <*>`,          stroke: '#eb2f96',
+      tip: '模板含 <*> 占位符，表示成功归纳出含变量的通用模板' },
+    { label: '参数提取率',    pct: pct(withParams, n), desc: `${withParams}/${n} 行有结构化参数`, stroke: '#fa8c16',
+      tip: '从消息体中解析出结构化 key=value 参数的行占比' },
+    { label: '元数据提取率',  pct: pct(withMeta, n),   desc: `${withMeta}/${n} 行有附加元数据`,  stroke: '#52c41a',
+      tip: '从日志行中额外识别出结构化元数据（如模块、文件名等）的行占比' },
+  ]
+
   return (
-    <div className="entry-detail">
-      {entry.parameters?.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <Text type="secondary" style={{ fontSize: 11 }}>提取参数</Text>
-          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.parameters, null, 2)}</pre>
-        </div>
-      )}
-      {entry.metadata && Object.keys(entry.metadata).length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <Text type="secondary" style={{ fontSize: 11 }}>元数据</Text>
-          <pre className="field-val entry-detail-pre">{JSON.stringify(entry.metadata, null, 2)}</pre>
-        </div>
-      )}
-      <div>
-        <Text type="secondary" style={{ fontSize: 11 }}>原始文本</Text>
-        <pre className="field-val entry-detail-pre">{entry.raw_text || '—'}</pre>
-      </div>
-    </div>
+    <Card className="accuracy-card" title={<Space><BarChartOutlined />提取完整度（结构化字段覆盖率）</Space>}>
+      <Row gutter={[20, 16]}>
+        {items.map(item => {
+          const st = getStatus(item.pct)
+          const sc = st ? statusStyle[st] : null
+          return (
+            <Col span={4} key={item.label}>
+              <Tooltip title={item.tip} placement="top">
+                <div className="accuracy-item">
+                  <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', cursor: 'help' }}>{item.label}</Text>
+                  {item.pct !== null ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '6px 0 3px' }}>
+                        <span style={{ fontSize: 26, fontWeight: 700, color: sc?.color || '#888' }}>{item.pct}%</span>
+                        {sc && <Tag color={sc.color} style={{ fontSize: 11 }}>{sc.label}</Tag>}
+                      </div>
+                      <Progress percent={item.pct} showInfo={false} strokeColor={item.stroke}
+                        trailColor="rgba(255,255,255,0.08)" size="small" />
+                      <Text type="secondary" style={{ fontSize: 11 }}>{item.desc}</Text>
+                    </>
+                  ) : (
+                    <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 8 }}>无数据</div>
+                  )}
+                </div>
+              </Tooltip>
+            </Col>
+          )
+        })}
+      </Row>
+    </Card>
   )
 }
 
-// ── 模板来源统计（非 CSV 模式） ───────────────────────────────────────
+// ── 模板来源统计（两种模式均用） ──────────────────────────────────────
 function TemplateStatsPanel({ entries }) {
   const stats = useMemo(() => computeTemplateStats(entries), [entries])
   if (!stats.total) return null
@@ -365,13 +499,12 @@ const LogCompare = () => {
   const schema  = parseResult?.csv_conversion?.schema
   const entries = parseResult?.entries || []
 
-  // 准确率（直接使用后端统一计算的结果）
+  // 准确率（CSV 模式，直接使用后端统一计算的结果）
   const accuracy = parseResult?.accuracy || null
   const backendFieldChecks = parseResult?.field_checks || []
   const backendCsvRows = parseResult?.csv_rows || null
-  const rowMapping = parseResult?.csv_conversion?.row_mapping || null
 
-  // 合并数据（使用后端返回的 csv_rows + field_checks，避免前后端不一致）
+  // ── CSV 对比数据 ────────────────────────────────────────────────────
   const mergedData = useMemo(() => {
     const rows = backendCsvRows || (csvData ? csvData.rows : null)
     if (!rows) return []
@@ -391,7 +524,7 @@ const LogCompare = () => {
 
   const pagedData = mergedData.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE)
 
-  // 表格列
+  // ── CSV 表格列 ──────────────────────────────────────────────────────
   const columns = useMemo(() => {
     if (!csvData) return []
     const roleOf = col => {
@@ -469,60 +602,103 @@ const LogCompare = () => {
     ]
   }, [csvData, parseResult, schema])
 
-  // 非 CSV：解析结果表
-  const logTableData = useMemo(() => {
+  // ── 非 CSV 对比数据 ─────────────────────────────────────────────────
+  const logMergedData = useMemo(() => {
     if (fileMode !== 'log') return []
-    return entries.map((entry, idx) => ({ key: idx, rowIndex: idx + 1, entry }))
+    return entries.map((entry, idx) => {
+      const quality = getLogEntryQuality(entry)
+      const missingFields = []
+      if (!entry.timestamp) missingFields.push('时间戳')
+      if (!entry.level)     missingFields.push('级别')
+      if (!entry.message)   missingFields.push('消息体')
+      return { key: idx, rowIndex: idx + 1, entry, quality, missingFields }
+    })
   }, [fileMode, entries])
 
-  const pagedLogData = logTableData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedLogData = logMergedData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const logColumns = useMemo(() => [
-    { title: '#', dataIndex: 'rowIndex', key: 'idx', width: 60, fixed: 'left' },
-    { title: '时间戳', key: 'p_ts', width: 170,
-      render: (_, rec) => {
-        const val = rec.entry?.timestamp
-        return val ? <span className="parsed-ts">{val}</span> : <span className="empty-cell">—</span>
-      }},
-    { title: '级别', key: 'p_lv', width: 100,
-      render: (_, rec) => {
-        const val = rec.entry?.level
-        return val ? <Tag color={getLevelColor(val)} style={{ margin: 0 }}>{val}</Tag> : <span className="empty-cell">—</span>
-      }},
-    { title: '消息体', key: 'p_msg', ellipsis: true, width: 280,
-      render: (_, rec) => {
-        const val = rec.entry?.message
-        return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
-          <span className="cell-text">{val || <span className="empty-cell">—</span>}</span>
-        </Tooltip>
-      }},
-    { title: '模板', key: 'p_tpl', ellipsis: true, width: 240,
-      render: (_, rec) => {
-        const val = rec.entry?.template
-        const src = rec.entry?.template_source
-        const hasPlaceholder = val?.includes('<*>')
-        return <Space size={4}>
-          {getTemplateSourceTag(src)}
-          {hasPlaceholder
-            ? <CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />
-            : <CloseOutlined style={{ color: '#8c8c8c', fontSize: 11 }} />}
-          <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
-            <span className={`cell-text ${hasPlaceholder ? 'template-dynamic' : 'template-static'}`}>
-              {val || <span className="empty-cell">—</span>}
-            </span>
+  // ── 非 CSV 表格列（与 CSV 同结构：原始行 | LILAC 解析结果） ──────────
+  const logCompareColumns = useMemo(() => {
+    const QCFG = {
+      good:    { icon: <CheckCircleOutlined />, color: '#52c41a' },
+      warn:    { icon: <WarningOutlined />,    color: '#faad14' },
+      bad:     { icon: <CloseCircleOutlined />, color: '#ff4d4f' },
+    }
+    const rawCols = [
+      { title: '原始文本', key: 'raw', width: 380, ellipsis: true,
+        render: (_, rec) => {
+          const val = rec.entry?.raw_text
+          return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 600 }}>
+            <span className="cell-text raw-text">{val || <span className="empty-cell">—</span>}</span>
           </Tooltip>
-        </Space>
-      }},
-    { title: '原始行', key: 'p_raw', ellipsis: true, width: 220,
-      render: (_, rec) => {
-        const val = rec.entry?.raw_text
-        return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 600 }}>
-          <span className="cell-text raw-text">{val || <span className="empty-cell">—</span>}</span>
-        </Tooltip>
-      }},
-  ], [])
+        }},
+    ]
+    const parsedCols = [
+      { title: '时间戳', key: 'p_ts', width: 170,
+        render: (_, rec) => {
+          const val = rec.entry?.timestamp
+          return val
+            ? <span className="parsed-ts">{val}</span>
+            : <span className="empty-cell">—</span>
+        }},
+      { title: '级别', key: 'p_lv', width: 95,
+        render: (_, rec) => {
+          const val = rec.entry?.level
+          return val
+            ? <Tag color={getLevelColor(val)} style={{ margin: 0 }}>{val}</Tag>
+            : <span className="empty-cell">—</span>
+        }},
+      { title: '消息体', key: 'p_msg', ellipsis: true, width: 260,
+        render: (_, rec) => {
+          const val = rec.entry?.message
+          return <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
+            <span className="cell-text">{val || <span className="empty-cell">—</span>}</span>
+          </Tooltip>
+        }},
+      { title: '来源', key: 'p_src', width: 72,
+        render: (_, rec) => getTemplateSourceTag(rec.entry?.template_source) },
+      { title: '模板', key: 'p_tpl', ellipsis: true, width: 220,
+        render: (_, rec) => {
+          const val = rec.entry?.template
+          const hasPlaceholder = val?.includes('<*>')
+          return <Space size={4}>
+            {hasPlaceholder
+              ? <CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />
+              : <CloseOutlined style={{ color: '#8c8c8c', fontSize: 11 }} />}
+            <Tooltip title={val} placement="topLeft" overlayStyle={{ maxWidth: 500 }}>
+              <span className={`cell-text ${hasPlaceholder ? 'template-dynamic' : 'template-static'}`}>
+                {val || <span className="empty-cell">—</span>}
+              </span>
+            </Tooltip>
+          </Space>
+        }},
+    ]
+    return [
+      { title: '#', dataIndex: 'rowIndex', key: 'idx', width: 80, fixed: 'left',
+        render: (val, rec) => {
+          const q = QCFG[rec.quality] || QCFG.bad
+          return (
+            <span style={{ color: q.color, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {q.icon}
+              <span>{val}</span>
+              {rec.missingFields?.length > 0 && (
+                <Tooltip title={`缺失：${rec.missingFields.join('、')}`}>
+                  <Tag color="orange" style={{ fontSize: 10, padding: '0 4px', marginLeft: 2, cursor: 'help' }}>
+                    缺{rec.missingFields.length}项
+                  </Tag>
+                </Tooltip>
+              )}
+            </span>
+          )
+        }},
+      { title: '原始日志行', children: rawCols },
+      { title: 'LILAC 解析结果', children: parsedCols },
+    ]
+  }, [])
 
   const qualityStats = mergedData.reduce((acc, r) => { acc[r.quality] = (acc[r.quality] || 0) + 1; return acc }, {})
+  const logQualityStats = logMergedData.reduce((acc, r) => { acc[r.quality] = (acc[r.quality] || 0) + 1; return acc }, {})
+
   const stats = parseResult ? {
     totalEntries: parseResult.total_entries,
     totalRows: parseResult.csv_conversion?.total_rows ?? parseResult.total_entries,
@@ -548,9 +724,10 @@ const LogCompare = () => {
     }
     return [
       { title: '解析条目', value: stats.totalEntries, icon: <DatabaseOutlined /> },
+      { title: '全字段完整', value: logQualityStats.good || 0, icon: <CheckCircleOutlined style={{ color: '#52c41a' }} /> },
       ...common,
     ]
-  }, [stats, fileMode])
+  }, [stats, fileMode, logQualityStats])
 
   const fileInfoExtra = fileMode === 'csv' && csvData
     ? ` · ${csvData.rows.length} 行 · ${csvData.headers.length} 列`
@@ -567,7 +744,7 @@ const LogCompare = () => {
             <TableOutlined style={{marginRight:8,color:'#00d4ff'}} />日志解析
           </Title>
           <Text type="secondary" style={{fontSize:13,marginTop:4}}>
-            支持 CSV / LOG / TXT / TRC 等格式；CSV 可逐字段对比，其他格式展示 LILAC 结构化解析结果
+            支持 CSV / LOG / TXT / TRC 等格式；均可逐行对比原始内容与 LILAC 结构化解析结果
           </Text>
         </div>
         {(selectedFile||parseResult) && <Button icon={<ReloadOutlined/>} onClick={handleReset}>重新上传</Button>}
@@ -580,7 +757,7 @@ const LogCompare = () => {
             <p className="ant-upload-drag-icon"><InboxOutlined style={{color:'#00d4ff',fontSize:48}}/></p>
             <p className="ant-upload-text">拖入日志文件，或点击选择</p>
             <p className="ant-upload-hint">
-              支持 {ACCEPTED_EXTENSIONS.join('、')}；CSV 上传后可逐字段验证，其他格式直接展示解析结果
+              支持 {ACCEPTED_EXTENSIONS.join('、')}；所有格式均支持原始行与解析结果的逐行对比
             </p>
           </Dragger>
           <div style={{textAlign:'center',marginTop:16}}>
@@ -630,7 +807,7 @@ const LogCompare = () => {
       {parseResult && stats && (
         <Row gutter={12} className="stats-row">
           {statsItems.map(s => (
-            <Col span={fileMode === 'csv' ? 4 : 5} key={s.title}>
+            <Col span={fileMode === 'csv' ? 4 : 4} key={s.title}>
               <Card className="stat-card"><Statistic title={s.title} value={s.value} prefix={s.icon}/></Card>
             </Col>
           ))}
@@ -660,11 +837,37 @@ const LogCompare = () => {
         </Card>
       )}
 
+      {/* 解析质量汇总（非 CSV 模式，解析后） */}
+      {parseResult && fileMode === 'log' && (
+        <Card className="schema-card" title={<Space><CodeOutlined />解析质量汇总</Space>}>
+          <Row gutter={16} align="middle" wrap>
+            <Col><Text type="secondary">文件格式：</Text><Tag color="blue">{(selectedFile?.name || '').split('.').pop()?.toUpperCase() || 'LOG'}</Tag></Col>
+            <Col><Text type="secondary">解析条目：</Text><Tag color="cyan">{entries.length}</Tag></Col>
+            <Divider type="vertical" />
+            {Object.entries(logQualityStats).map(([q, cnt]) => {
+              const cfg = {
+                good: { color: '#52c41a', label: '全字段完整' },
+                warn: { color: '#faad14', label: '字段部分缺失' },
+                bad:  { color: '#ff4d4f', label: '消息体缺失' },
+              }[q]
+              return cfg
+                ? <Col key={q}><span style={{ color: cfg.color, fontSize: 13 }}>{cnt} 条{cfg.label}</span></Col>
+                : null
+            })}
+          </Row>
+        </Card>
+      )}
+
       {/* 准确率面板（仅 CSV） */}
       {fileMode === 'csv' && accuracy && <AccuracyPanel accuracy={accuracy} schema={schema}/>}
 
-      {/* 模板统计（非 CSV） */}
+      {/* 提取完整度面板（非 CSV，解析后） */}
       {fileMode === 'log' && parseResult && entries.length > 0 && (
+        <LogCompletenessPanel entries={entries} />
+      )}
+
+      {/* 模板统计（两种模式均展示） */}
+      {parseResult && entries.length > 0 && (
         <TemplateStatsPanel entries={entries} />
       )}
 
@@ -715,26 +918,26 @@ const LogCompare = () => {
         </Card>
       )}
 
-      {/* 日志解析结果表（非 CSV） */}
+      {/* 非 CSV 对比表格（解析后） */}
       {fileMode === 'log' && parseResult && (
         <Card className="compare-card" title={
           <Space>
-            <TableOutlined />解析结果
+            <TableOutlined />对比详情
             <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
-              {logTableData.length} 条 · 点击行左侧 ▶ 查看参数与原始文本
+              {logMergedData.length} 条 · 点击行左侧 ▶ 展开字段级提取详情
             </Text>
           </Space>
         }>
-          {logTableData.length === 0 ? <Empty description="暂无解析结果"/> : (
+          {logMergedData.length === 0 ? <Empty description="暂无解析结果"/> : (
             <Table
-              columns={logColumns}
+              columns={logCompareColumns}
               dataSource={pagedLogData}
               expandable={{
-                expandedRowRender: rec => <EntryDetailTable entry={rec.entry} />,
+                expandedRowRender: rec => <LogEntryFieldTable entry={rec.entry} />,
                 rowExpandable: rec => !!rec.entry,
               }}
               pagination={{
-                current: page, pageSize: PAGE_SIZE, total: logTableData.length,
+                current: page, pageSize: PAGE_SIZE, total: logMergedData.length,
                 onChange: setPage, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} 条`, showSizeChanger: false,
               }}
               scroll={{ x: 'max-content', y: 440 }}
