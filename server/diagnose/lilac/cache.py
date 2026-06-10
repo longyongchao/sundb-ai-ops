@@ -46,7 +46,8 @@ class AdaptiveParsingCache:
     匹配：逐位置比较，<*> 匹配任何 token，相似度 ≥ 阈值即命中
     """
 
-    def __init__(self, db_path: str, similarity_threshold: float = 0.85, merge_enabled: bool = True):
+    def __init__(self, db_path: str, similarity_threshold: float = 0.85,
+                 merge_enabled: bool = True):
         self._db_path = db_path
         self._threshold = similarity_threshold
         self._merge_enabled = merge_enabled
@@ -96,7 +97,7 @@ class AdaptiveParsingCache:
         if not tokens:
             return None
 
-        # (0) token 签名精确匹配（处理 LLM 模板 token 结构与输入不一致的情况）
+        # (0) token 签名精确匹配
         sig = tuple(tokens)
         sig_hit = self._token_sig_index.get(sig)
         if sig_hit is not None:
@@ -145,8 +146,7 @@ class AdaptiveParsingCache:
                lookup_tokens: Optional[List[str]] = None) -> LogTemplate:
         """插入新模板到缓存（去重）
 
-        lookup_tokens: 如果模板的 token 结构与输入不一致（如 LLM 合并了多个 token），
-                       传入原始输入的 tokens 用于建立签名索引。
+        lookup_tokens: 原始输入 tokens，用于建立签名索引（当模板 token 结构与输入不一致时）
         """
         with self._lock:
             existing = self._find_equivalent(template.template_str)
@@ -198,63 +198,39 @@ class AdaptiveParsingCache:
 
             return template
 
-    def _find_equivalent(self, template_str: str) -> Optional[LogTemplate]:
-        tid = LogTemplate.generate_id(template_str)
-        for bucket in self._cache.values():
-            for candidates in bucket.values():
-                for tpl in candidates:
-                    if tpl.template_id == tid:
-                        return tpl
-        return None
-
-    def _record_hit(self, template: LogTemplate) -> None:
-        template.hit_count += 1
-        template.last_hit_at = time.time()
-        with self._lock:
-            self._conn.execute(
-                "UPDATE templates SET hit_count = ?, last_hit_at = ? WHERE template_id = ?",
-                (template.hit_count, template.last_hit_at, template.template_id),
-            )
-            self._conn.commit()
-
-    # ------ Template Merging ------
-
     def _try_merge_after_insert(self, new_template: LogTemplate) -> None:
-        """检查新插入模板是否可以与同 token_count 的已有模板合并"""
+        """尝试将新模板与同 bucket 中已有模板合并"""
         bucket = self._cache.get(new_template.token_count)
         if not bucket:
             return
-
-        for first_token, candidates in list(bucket.items()):
-            for existing in candidates:
+        for ft, candidates in list(bucket.items()):
+            for existing in list(candidates):
                 if existing.template_id == new_template.template_id:
                     continue
-                merged = self._compute_merge(existing, new_template)
+                merged = self._try_merge_pair(existing, new_template)
                 if merged:
                     self._apply_merge(existing, new_template, merged)
                     return
 
-    def _compute_merge(self, t1: LogTemplate, t2: LogTemplate) -> Optional[LogTemplate]:
-        """判断两个模板是否可合并（恰好 1 个位置不同且差异段是数字型）"""
+    @staticmethod
+    def _try_merge_pair(t1: LogTemplate, t2: LogTemplate) -> Optional[LogTemplate]:
+        """尝试合并两个模板，仅当差异位置是数字型变量时才合并"""
         if t1.token_count != t2.token_count:
             return None
 
         diff_positions = []
         merged_tokens = []
-
         for i, (tok1, tok2) in enumerate(zip(t1.tokens, t2.tokens)):
             if tok1 == tok2:
                 merged_tokens.append(tok1)
             else:
-                diff_positions.append(i)
-                if len(diff_positions) > 1:
-                    return None
-                merged_tok = self._merge_tokens(tok1, tok2)
+                merged_tok = AdaptiveParsingCache._merge_tokens(tok1, tok2)
                 if merged_tok is None:
                     return None
                 merged_tokens.append(merged_tok)
+                diff_positions.append(i)
 
-        if len(diff_positions) != 1:
+        if not diff_positions or len(diff_positions) > 3:
             return None
 
         merged_str = " ".join(merged_tokens)
@@ -272,11 +248,7 @@ class AdaptiveParsingCache:
 
     @staticmethod
     def _merge_tokens(tok1: str, tok2: str) -> Optional[str]:
-        """合并两个不同 token：找公共前后缀，中间替换为 <*>
-
-        仅当差异部分是数字型时才合并。
-        如果任一 token 已经是 <*>，直接返回 <*>。
-        """
+        """合并两个不同 token：仅当差异部分是数字型时才合并为 <*>"""
         if tok1 == "<*>" or tok2 == "<*>":
             return "<*>"
 
@@ -295,7 +267,6 @@ class AdaptiveParsingCache:
         mid1 = tok1[prefix_len:end1]
         mid2 = tok2[prefix_len:end2]
 
-        # If either middle is already <*>, the merge result keeps <*>
         if mid1 == "<*>" or mid2 == "<*>":
             prefix = tok1[:prefix_len]
             suffix = tok1[end1:] if suffix_len else ""
@@ -304,7 +275,6 @@ class AdaptiveParsingCache:
         if not AdaptiveParsingCache._is_variable_segment(mid1, mid2):
             return None
 
-        # If middles are numeric and suffix is also numeric, absorb suffix into wildcard
         prefix = tok1[:prefix_len]
         suffix = tok1[end1:] if suffix_len else ""
         if suffix and suffix.isdigit():
@@ -314,27 +284,17 @@ class AdaptiveParsingCache:
 
     @staticmethod
     def _is_variable_segment(mid1: str, mid2: str) -> bool:
-        """判断两个差异段是否都适合作为变量（可合并为 <*>）
-
-        规则：两段都必须是短的字母数字组合，且至少有一段包含数字。
-        """
+        """判断两个差异段是否都适合作为变量"""
         if not mid1 and not mid2:
             return True
-
         combined = mid1 + mid2
         if not any(c.isdigit() for c in combined):
             return False
-
         return (AdaptiveParsingCache._is_numeric_like(mid1)
                 and AdaptiveParsingCache._is_numeric_like(mid2))
 
     @staticmethod
     def _is_numeric_like(s: str) -> bool:
-        """判断字符串是否为数字型（可作为模板变量的短标识符）
-
-        接受：空串、纯数字、含数字的短字母数字混合、纯十六进制
-        拒绝：纯字母长单词（如 ERROR、WARNING）
-        """
         if not s:
             return True
         if s.isdigit():
@@ -350,7 +310,6 @@ class AdaptiveParsingCache:
         with self._lock:
             self._conn.execute("DELETE FROM templates WHERE template_id = ?", (old.template_id,))
             self._conn.execute("DELETE FROM templates WHERE template_id = ?", (new.template_id,))
-
             self._conn.execute(
                 "UPDATE demonstrations SET template_id = ? WHERE template_id = ?",
                 (merged.template_id, old.template_id),
@@ -359,38 +318,27 @@ class AdaptiveParsingCache:
                 "UPDATE demonstrations SET template_id = ? WHERE template_id = ?",
                 (merged.template_id, new.template_id),
             )
-
             self._conn.execute(
                 "INSERT OR IGNORE INTO templates "
                 "(template_id, template_str, token_count, first_token, tokens_json, "
                 "hit_count, created_at, last_hit_at, source) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    merged.template_id,
-                    merged.template_str,
-                    merged.token_count,
-                    merged.first_token,
-                    json.dumps(merged.tokens),
-                    merged.hit_count,
-                    merged.created_at,
-                    merged.last_hit_at,
-                    merged.source,
+                    merged.template_id, merged.template_str, merged.token_count,
+                    merged.first_token, json.dumps(merged.tokens), merged.hit_count,
+                    merged.created_at, merged.last_hit_at, merged.source,
                 ),
             )
             self._conn.commit()
 
         self._remove_from_memory(old)
         self._remove_from_memory(new)
-
         bucket = self._cache.setdefault(merged.token_count, {})
         bucket.setdefault(merged.first_token, []).append(merged)
 
-        logger.debug(
-            f"[LILAC] 模板合并: '{old.template_str}' + '{new.template_str}' → '{merged.template_str}'"
-        )
+        logger.debug(f"[LILAC] 模板合并: '{old.template_str}' + '{new.template_str}' → '{merged.template_str}'")
 
     def _remove_from_memory(self, template: LogTemplate) -> None:
-        """从内存缓存中移除指定模板"""
         bucket = self._cache.get(template.token_count)
         if not bucket:
             return
@@ -400,6 +348,25 @@ class AdaptiveParsingCache:
         bucket[template.first_token] = [t for t in candidates if t.template_id != template.template_id]
         if not bucket[template.first_token]:
             del bucket[template.first_token]
+
+    def _find_equivalent(self, template_str: str) -> Optional[LogTemplate]:
+        tid = LogTemplate.generate_id(template_str)
+        for bucket in self._cache.values():
+            for candidates in bucket.values():
+                for tpl in candidates:
+                    if tpl.template_id == tid:
+                        return tpl
+        return None
+
+    def _record_hit(self, template: LogTemplate) -> None:
+        template.hit_count += 1
+        template.last_hit_at = time.time()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE templates SET hit_count = ?, last_hit_at = ? WHERE template_id = ?",
+                (template.hit_count, template.last_hit_at, template.template_id),
+            )
+            self._conn.commit()
 
     def get_statistics(self) -> Dict[str, int]:
         total_templates = sum(
