@@ -18,7 +18,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from benchmark.lilac_adapter import generate_logformat_regex
+from benchmark.utils import generate_logformat_regex
 
 
 class LilacApiAdapter:

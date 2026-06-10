@@ -1,1 +1,1 @@
-"""LILAC Loghub-2.0 Benchmark — 日志解析评测工具"""
+"""LILAC Loghub-2.0 Benchmark — 通过 HTTP API 评测日志解析精度"""

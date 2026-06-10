@@ -1,10 +1,10 @@
-"""Loghub-2.0 Benchmark Runner for LILAC
+"""Loghub-2.0 Benchmark Runner for LILAC (API Mode)
 
 用法:
     python -m benchmark.runner --mode 2k --datasets all --no-llm
     python -m benchmark.runner --mode 2k --datasets Hadoop,HDFS --enable-llm
     python -m benchmark.runner --mode full --datasets all --enable-llm --reset-cache
-    python -m benchmark.runner --mode 2k --datasets all --via-api --no-llm
+    python -m benchmark.runner --mode full --datasets all --api-base http://10.0.0.1:7861
 """
 
 import argparse
@@ -18,7 +18,7 @@ from typing import List
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmark.evaluator import EvalResult, evaluate_dataset
-from benchmark.lilac_adapter import LilacLoghubAdapter
+from benchmark.lilac_api_adapter import LilacApiAdapter
 from benchmark.loghub_settings import DATASETS_2K, DATASETS_FULL, benchmark_settings
 
 
@@ -34,8 +34,7 @@ def parse_args():
     )
     parser.add_argument("--enable-llm", action="store_true", default=False, help="启用 LLM 模板提取")
     parser.add_argument("--no-llm", action="store_true", default=False, help="禁用 LLM (仅 cache+Drain3)")
-    parser.add_argument("--no-drain3", action="store_true", default=False, help="同时禁用 Drain3")
-    parser.add_argument("--reset-cache", action="store_true", help="每个数据集前清空缓存")
+    parser.add_argument("--reset-cache", action="store_true", help="每个数据集前清空服务端缓存")
     parser.add_argument(
         "--data-dir",
         default=None,
@@ -47,18 +46,6 @@ def parse_args():
         help="结果输出目录 (default: benchmark/results/)",
     )
     parser.add_argument(
-        "--similarity-threshold",
-        type=float,
-        default=0.85,
-        help="LILAC cache 相似度阈值 (default: 0.85)",
-    )
-    parser.add_argument(
-        "--via-api",
-        action="store_true",
-        default=False,
-        help="通过 HTTP API 调用 LILAC 服务（评测生产环境行为）",
-    )
-    parser.add_argument(
         "--api-base",
         default="http://localhost:7861",
         help="LILAC API 地址 (default: http://localhost:7861)",
@@ -67,7 +54,7 @@ def parse_args():
         "--batch-size",
         type=int,
         default=10000,
-        help="API 模式每批发送行数 (default: 10000)",
+        help="每批发送行数 (default: 10000)",
     )
     return parser.parse_args()
 
@@ -84,24 +71,19 @@ def run_benchmark(args):
 
     data_dir = args.data_dir or os.path.join(benchmark_dir, "datasets", f"{args.mode}_dataset")
     output_dir = args.output_dir or os.path.join(benchmark_dir, "results")
-    cache_dir = os.path.join(output_dir, "cache")
     os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(cache_dir, exist_ok=True)
 
     enable_llm = args.enable_llm and not args.no_llm
-    enable_drain3 = not args.no_drain3
-    mode_label = "llm" if enable_llm else "nollm"
-    if args.via_api:
-        mode_label = f"api_{mode_label}"
+    mode_label = "api_llm" if enable_llm else "api_nollm"
 
     datasets = get_datasets(args)
     results: List[EvalResult] = []
     total_time = 0.0
 
     print(f"\n{'='*60}")
-    print(f"  LILAC Loghub-2.0 Benchmark")
-    print(f"  Mode: {args.mode} | LLM: {enable_llm} | Drain3: {enable_drain3}")
-    print(f"  Via API: {args.via_api} | Datasets: {len(datasets)} | Similarity: {args.similarity_threshold}")
+    print(f"  LILAC Loghub-2.0 Benchmark (API Mode)")
+    print(f"  Mode: {args.mode} | LLM: {enable_llm} | Datasets: {len(datasets)}")
+    print(f"  API: {args.api_base} | Batch: {args.batch_size}")
     print(f"{'='*60}\n")
 
     for dataset in datasets:
@@ -117,11 +99,6 @@ def run_benchmark(args):
             print(f"  [SKIP] {dataset}: file not found: {log_path}")
             continue
 
-        # 独立缓存
-        cache_path = os.path.join(cache_dir, f"{dataset}_{mode_label}.db")
-        if args.reset_cache and os.path.exists(cache_path):
-            os.remove(cache_path)
-
         print(f"  [{dataset}] Parsing...", end=" ", flush=True)
         start = time.time()
 
@@ -129,31 +106,15 @@ def run_benchmark(args):
         log_name = os.path.basename(log_file)
         result_dir = os.path.join(output_dir, f"lilac_{mode_label}_{args.mode}")
 
-        if args.via_api:
-            from benchmark.lilac_api_adapter import LilacApiAdapter
-
-            adapter = LilacApiAdapter(
-                log_format=setting["log_format"],
-                indir=indir,
-                outdir=result_dir,
-                rex=setting["regex"],
-                api_base=args.api_base,
-                batch_size=args.batch_size,
-                reset_cache=args.reset_cache,
-            )
-        else:
-            adapter = LilacLoghubAdapter(
-                log_format=setting["log_format"],
-                indir=indir,
-                outdir=result_dir,
-                rex=setting["regex"],
-                cache_db_path=cache_path,
-                enable_llm=enable_llm,
-                enable_drain3=enable_drain3,
-                similarity_threshold=args.similarity_threshold,
-                drain_depth=setting.get("depth", 4),
-                drain_sim_th=setting.get("st", 0.5),
-            )
+        adapter = LilacApiAdapter(
+            log_format=setting["log_format"],
+            indir=indir,
+            outdir=result_dir,
+            rex=setting["regex"],
+            api_base=args.api_base,
+            batch_size=args.batch_size,
+            reset_cache=args.reset_cache,
+        )
 
         try:
             adapter.parse(log_name)
@@ -203,13 +164,11 @@ def run_benchmark(args):
                     "drain_sim_th": setting.get("st", 0.5),
                     "mode": args.mode,
                     "llm_enabled": enable_llm,
-                    "via_api": args.via_api,
+                    "cache_hits": adapter.total_cache_hits,
+                    "drain3_fallbacks": adapter.total_drain3_fallbacks,
+                    "llm_calls": adapter.total_llm_calls,
+                    "batch_size": args.batch_size,
                 }
-                if args.via_api:
-                    detail["cache_hits"] = adapter.total_cache_hits
-                    detail["drain3_fallbacks"] = adapter.total_drain3_fallbacks
-                    detail["llm_calls"] = adapter.total_llm_calls
-                    detail["batch_size"] = args.batch_size
                 with open(per_ds_path, "w") as f:
                     json.dump(detail, f, indent=2, ensure_ascii=False)
                 # 大文件评测完成后删除中间 CSV 释放磁盘空间
@@ -235,12 +194,11 @@ def run_benchmark(args):
         print(f"    GA={avg_ga:.4f}  FGA={avg_fga:.4f}  PA={avg_pa:.4f}  FTA={avg_fta:.4f}")
         print(f"  Total time: {total_time:.1f}s")
 
-        # 输出详细 JSON
         summary = {
             "mode": args.mode,
             "llm_enabled": enable_llm,
-            "drain3_enabled": enable_drain3,
-            "similarity_threshold": args.similarity_threshold,
+            "api_base": args.api_base,
+            "batch_size": args.batch_size,
             "total_time_s": round(total_time, 2),
             "averages": {
                 "GA": round(avg_ga, 4),
