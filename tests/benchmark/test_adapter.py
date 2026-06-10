@@ -1,15 +1,13 @@
-"""LILAC Loghub-2.0 适配器单元测试"""
+"""LILAC Loghub-2.0 Benchmark 单元测试"""
 
 import os
-import re
 import sys
-import tempfile
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from benchmark.lilac_adapter import LilacLoghubAdapter, generate_logformat_regex
+from benchmark.utils import generate_logformat_regex
 from benchmark.loghub_settings import benchmark_settings
 
 
@@ -56,61 +54,6 @@ class TestLogFormatRegex:
         assert fields["Pid"] == "148"
         assert fields["Level"] == "INFO"
         assert "Received block" in fields["Content"]
-
-
-class TestLilacAdapter:
-    """端到端测试：创建临时日志文件，运行适配器，验证 CSV 输出。"""
-
-    SAMPLE_LOG = """081109 203518 148 INFO dfs.DataNode$PacketResponder: PacketResponder 1 for block blk_38865049064139660 terminating
-081109 203518 148 INFO dfs.DataNode$PacketResponder: PacketResponder 0 for block blk_-6670958622368987959 terminating
-081109 203519 148 INFO dfs.DataNode$PacketResponder: PacketResponder 2 for block blk_38865049064139660 terminating
-081109 203519 148 INFO dfs.FSNamesystem: BLOCK* NameSystem.allocateBlock: /mnt/hadoop/mapred/system/job_200811092030_0001/job.jar. blk_4868460839898259058
-081109 203520 148 INFO dfs.DataNode$DataXceiver: Receiving block blk_-6670958622368987959 src: /10.250.14.224:42816 dest: /10.250.14.224:50010
-"""
-
-    def test_parse_produces_csvs(self, tmp_path):
-        """适配器应生成 structured.csv 和 templates.csv。"""
-        log_dir = tmp_path / "HDFS"
-        log_dir.mkdir()
-        log_file = log_dir / "HDFS_2k.log"
-        log_file.write_text(self.SAMPLE_LOG)
-
-        outdir = str(tmp_path / "output")
-        adapter = LilacLoghubAdapter(
-            log_format=benchmark_settings["HDFS"]["log_format"],
-            indir=str(log_dir),
-            outdir=outdir,
-            rex=benchmark_settings["HDFS"]["regex"],
-            enable_llm=False,
-            enable_drain3=True,
-        )
-        adapter.parse("HDFS_2k.log")
-
-        structured = os.path.join(outdir, "HDFS_2k.log_structured.csv")
-        templates = os.path.join(outdir, "HDFS_2k.log_templates.csv")
-
-        assert os.path.exists(structured)
-        assert os.path.exists(templates)
-
-        import pandas as pd
-        df = pd.read_csv(structured)
-        assert "LineId" in df.columns
-        assert "EventId" in df.columns
-        assert "EventTemplate" in df.columns
-        assert "Content" in df.columns
-        assert len(df) == 5
-
-        tdf = pd.read_csv(templates)
-        assert "EventId" in tdf.columns
-        assert "EventTemplate" in tdf.columns
-        assert "Occurrences" in tdf.columns
-
-    def test_event_id_is_deterministic(self, tmp_path):
-        """相同模板应产生相同 EventId。"""
-        eid1 = LilacLoghubAdapter._compute_event_id("PacketResponder <*> for block <*> terminating")
-        eid2 = LilacLoghubAdapter._compute_event_id("PacketResponder <*> for block <*> terminating")
-        assert eid1 == eid2
-        assert len(eid1) == 8
 
 
 class TestEvaluator:
