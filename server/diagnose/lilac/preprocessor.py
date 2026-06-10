@@ -1,10 +1,39 @@
 """LILAC 预处理器：日志头剥离、正则掩码、Token化"""
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 PLACEHOLDER = "<*>"
+
+# PostgreSQL jsonlog severity → 标准级别
+PG_SEVERITY_MAP = {
+    "DEBUG": "DEBUG",
+    "LOG": "INFO",
+    "INFO": "INFO",
+    "NOTICE": "INFO",
+    "WARNING": "WARNING",
+    "ERROR": "ERROR",
+    "FATAL": "FATAL",
+    "PANIC": "FATAL",
+}
+
+# JSON 日志中不作为 metadata 展示的字段（已单独提取）
+_JSON_DISPLAY_KEYS = frozenset({"timestamp", "error_severity", "message"})
+_JSON_MESSAGE_EQUALS_RE = re.compile(
+    r'(\b[A-Za-z_][\w.-]*\s*=\s*)("[^"]*"|\'[^\']*\'|[^\s,\]\)\};]+)'
+)
+_JSON_MESSAGE_COLON_VALUE_RE = re.compile(
+    r'(\b[A-Za-z_][\w.-]*:\s*)("[^"]*"|\'[^\']*\'|0x[0-9a-fA-F]+|[0-9a-fA-F]+/[0-9a-fA-F]+|\d+(?:\.\d+)?)'
+)
+_JSON_MESSAGE_TIMESTAMP_RE = re.compile(
+    r'\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\s+[A-Z]{2,4})?\b'
+)
+_JSON_MESSAGE_IPV4_RE = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b')
+_JSON_MESSAGE_PATH_RE = re.compile(r'(?:/[\w.\-]+){2,}')
+_JSON_MESSAGE_LSN_RE = re.compile(r'\b[0-9A-Fa-f]+/[0-9A-Fa-f]+\b')
+_JSON_MESSAGE_NUMBER_RE = re.compile(r'\b\d+(?:\.\d+)?\b')
 
 # ============================================================
 # 日志头格式定义（按优先级排列）
@@ -88,6 +117,7 @@ class PreprocessedLine:
     header_fields: Dict[str, str] = field(default_factory=dict)
     header_format: str = ""
     body: str = ""
+    template_body: str = ""
     masked_body: str = ""
     tokens: List[str] = field(default_factory=list)
     token_count: int = 0
@@ -110,8 +140,14 @@ class LogPreprocessor:
         if not raw_line.strip():
             return PreprocessedLine(raw_text=raw_line)
 
-        header_fields, header_format, body = self._strip_header(raw_line)
-        masked_body = self._apply_masks(body)
+        json_result = self._try_parse_json_line(raw_line)
+        if json_result is not None:
+            header_fields, header_format, body, template_body = json_result
+        else:
+            header_fields, header_format, body = self._strip_header(raw_line)
+            template_body = body
+
+        masked_body = self._apply_masks(template_body)
         tokens = self._tokenize(masked_body)
 
         return PreprocessedLine(
@@ -119,11 +155,64 @@ class LogPreprocessor:
             header_fields=header_fields,
             header_format=header_format,
             body=body,
+            template_body=template_body,
             masked_body=masked_body,
             tokens=tokens,
             token_count=len(tokens),
             first_token=tokens[0] if tokens else "",
         )
+
+    def _try_parse_json_line(
+        self, line: str,
+    ) -> Optional[Tuple[Dict[str, str], str, str, str]]:
+        """解析 JSON 结构化日志行（如 PostgreSQL jsonlog）。"""
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            return None
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(obj, dict):
+            return None
+
+        header_fields: Dict[str, str] = {}
+        for key, value in obj.items():
+            if value is None or key in _JSON_DISPLAY_KEYS:
+                continue
+            if isinstance(value, (str, int, float, bool)):
+                header_fields[key] = str(value)
+
+        if "timestamp" in obj and obj["timestamp"] is not None:
+            header_fields["timestamp"] = str(obj["timestamp"])
+
+        severity = obj.get("error_severity") or obj.get("level") or ""
+        if severity:
+            header_fields["level"] = PG_SEVERITY_MAP.get(
+                str(severity).upper(), str(severity).upper()
+            )
+
+        message = obj.get("message", "")
+        if message is None:
+            message = ""
+        elif not isinstance(message, str):
+            message = str(message)
+
+        template_body = self._mask_json_message_values(message)
+        return header_fields, "json_log", message, template_body
+
+    @staticmethod
+    def _mask_json_message_values(message: str) -> str:
+        """JSON 日志用 message 提取模板，并预先掩码常见 key=value 动态值。"""
+        if not message:
+            return message
+        message = _JSON_MESSAGE_EQUALS_RE.sub(rf"\1{PLACEHOLDER}", message)
+        message = _JSON_MESSAGE_COLON_VALUE_RE.sub(rf"\1{PLACEHOLDER}", message)
+        message = _JSON_MESSAGE_TIMESTAMP_RE.sub(PLACEHOLDER, message)
+        message = _JSON_MESSAGE_IPV4_RE.sub(PLACEHOLDER, message)
+        message = _JSON_MESSAGE_PATH_RE.sub(PLACEHOLDER, message)
+        message = _JSON_MESSAGE_LSN_RE.sub(PLACEHOLDER, message)
+        return _JSON_MESSAGE_NUMBER_RE.sub(PLACEHOLDER, message)
 
     def _strip_header(self, line: str) -> Tuple[Dict[str, str], str, str]:
         for fmt_name, pattern, field_names in self._header_patterns:

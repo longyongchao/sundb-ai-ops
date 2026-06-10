@@ -23,6 +23,7 @@ from server.utils import BaseResponse
 logger = logging.getLogger(__name__)
 
 _parser = None
+_PARSE_MODES = {"auto", "llm", "drain3"}
 
 
 def _get_parser():
@@ -35,8 +36,15 @@ def _get_parser():
     return _parser
 
 
+def _normalize_parse_mode(parse_mode: Optional[str]) -> str:
+    """规范化前端传入的解析模式，未知值回退到 auto 保持兼容。"""
+    mode = (parse_mode or "auto").strip().lower()
+    return mode if mode in _PARSE_MODES else "auto"
+
+
 async def lilac_parse(
     file: UploadFile = File(..., description="任意日志文件（支持 .log/.txt/.csv 等格式）"),
+    parse_mode: str = Query("auto", description="解析模式: auto / llm / drain3"),
 ) -> BaseResponse:
     """上传任意日志文件，通过 LILAC 解析。
 
@@ -44,6 +52,7 @@ async def lilac_parse(
     再交给 LILAC 进行模板提取与结构化解析。
     """
     filename = file.filename or "unknown.log"
+    mode = _normalize_parse_mode(parse_mode)
     tmp_dir = tempfile.mkdtemp(prefix="lilac_")
     tmp_path = os.path.join(tmp_dir, filename)
 
@@ -59,7 +68,9 @@ async def lilac_parse(
             from server.diagnose.csv_log_converter import CsvLogConverter
             converter = CsvLogConverter()
             conv_result = converter.convert_file(tmp_path, encoding="utf-8")
-            result = parser.parse_content(conv_result.log_text, source_file=filename)
+            result = parser.parse_content(
+                conv_result.log_text, source_file=filename, parse_mode=mode
+            )
             csv_meta = {
                 "total_rows": conv_result.total_rows,
                 "converted_rows": conv_result.converted_rows,
@@ -76,7 +87,7 @@ async def lilac_parse(
                 f"rows={conv_result.total_rows}, converted={conv_result.converted_rows}"
             )
         else:
-            result = parser.parse_file(tmp_path)
+            result = parser.parse_file(tmp_path, parse_mode=mode)
 
         entries_data = []
         for e in result.entries:
@@ -95,6 +106,7 @@ async def lilac_parse(
 
         data = {
             "filename": filename,
+            "parse_mode": mode,
             "total_entries": len(result.entries),
             "cache_hits": result.cache_hits,
             "llm_calls": result.llm_calls,
@@ -115,6 +127,7 @@ async def lilac_parse(
 
 async def lilac_parse_csv(
     file: UploadFile = File(..., description="CSV 格式日志文件"),
+    parse_mode: str = Query("auto", description="解析模式: auto / llm / drain3"),
 ) -> BaseResponse:
     """上传 CSV 日志文件，返回列角色推断 + LILAC 解析 + 服务端准确率验证。
 
@@ -125,6 +138,7 @@ async def lilac_parse_csv(
     - accuracy: 聚合准确率指标
     """
     filename = file.filename or "unknown.csv"
+    mode = _normalize_parse_mode(parse_mode)
     tmp_dir = tempfile.mkdtemp(prefix="lilac_csv_")
     tmp_path = os.path.join(tmp_dir, filename)
 
@@ -138,7 +152,9 @@ async def lilac_parse_csv(
         conv_result = converter.convert_file(tmp_path, encoding="utf-8")
 
         parser = _get_parser()
-        result = parser.parse_content(conv_result.log_text, source_file=filename)
+        result = parser.parse_content(
+            conv_result.log_text, source_file=filename, parse_mode=mode
+        )
 
         entries_data = []
         for e in result.entries:
@@ -164,6 +180,7 @@ async def lilac_parse_csv(
 
         data = {
             "filename": filename,
+            "parse_mode": mode,
             "csv_conversion": {
                 "total_rows": conv_result.total_rows,
                 "converted_rows": conv_result.converted_rows,
@@ -388,11 +405,13 @@ def _compute_field_checks(csv_rows, row_mapping, entries_data, schema, converter
 async def lilac_parse_text(
     text: str = Body(..., embed=True, description="日志文本内容"),
     source_file: Optional[str] = Body(None, embed=True, description="来源文件名(可选)"),
+    parse_mode: str = Body("auto", embed=True, description="解析模式: auto / llm / drain3"),
 ) -> BaseResponse:
     """直接提交日志文本解析"""
     try:
+        mode = _normalize_parse_mode(parse_mode)
         parser = _get_parser()
-        result = parser.parse_content(text, source_file=source_file)
+        result = parser.parse_content(text, source_file=source_file, parse_mode=mode)
 
         entries_data = []
         for e in result.entries:
@@ -409,6 +428,7 @@ async def lilac_parse_text(
             entries_data.append(entry_dict)
 
         data = {
+            "parse_mode": mode,
             "total_entries": len(result.entries),
             "cache_hits": result.cache_hits,
             "llm_calls": result.llm_calls,

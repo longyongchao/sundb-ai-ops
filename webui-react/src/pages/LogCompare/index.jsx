@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   Card, Button, Upload, Table, Tag, Tooltip, Row, Col,
   Statistic, Alert, Space, Typography, Divider, Empty,
-  Progress, message as antMessage,
+  Progress, Segmented, message as antMessage,
 } from 'antd'
 import {
   InboxOutlined, FileTextOutlined,
@@ -10,6 +10,7 @@ import {
   ClockCircleOutlined, ThunderboltOutlined, DatabaseOutlined,
   ReloadOutlined, TableOutlined, BarChartOutlined,
   CheckOutlined, CloseOutlined, PlayCircleOutlined, CodeOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 import { lilacAPI } from '@/utils/api'
 import './index.scss'
@@ -74,6 +75,17 @@ const DEMO_PARSE_RESULT = {
 // 支持 LILAC 可解析的日志格式（与后端 /diagnose/lilac/parse 一致）
 const ACCEPTED_EXTENSIONS = ['.csv', '.log', '.txt', '.trc', '.out', '.trace']
 const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(',')
+const PARSE_MODE_LABELS = { llm: 'LLM', drain3: 'DRAIN3' }
+const PARSE_MODE_OPTIONS = [
+  {
+    label: <span className="parse-mode-option"><ThunderboltOutlined />LLM</span>,
+    value: 'llm',
+  },
+  {
+    label: <span className="parse-mode-option"><DatabaseOutlined />DRAIN3</span>,
+    value: 'drain3',
+  },
+]
 
 function isCsvFile(name) {
   return /\.csv$/i.test(name || '')
@@ -167,6 +179,27 @@ function RoleBadge({ role }) {
     background:cfg.color+'33', color:cfg.color, border:`1px solid ${cfg.color}66`, marginLeft:4 }}>{cfg.label}</span>
 }
 
+// ── 完整模板展示（展开详情用，避免 ellipsis 截断） ───────────────────
+function FullTemplateBlock({ template, templateSource }) {
+  if (!template) return null
+  const hasVar = template.includes('<*>')
+  return (
+    <div style={{ marginTop: 10 }}>
+      <Space size={8} style={{ marginBottom: 6 }}>
+        <Text type="secondary" style={{ fontSize: 11 }}>完整模板</Text>
+        {getTemplateSourceTag(templateSource)}
+        <Tag style={{ fontSize: 11 }} color={hasVar ? 'green' : 'default'}>
+          {hasVar ? '含变量 <*>' : '纯静态模板'}
+        </Tag>
+        <Text type="secondary" style={{ fontSize: 11 }}>{template.length} 字符</Text>
+      </Space>
+      <pre className={`field-val entry-detail-pre entry-detail-pre--template ${hasVar ? 'template-dynamic' : 'template-static'}`}>
+        {template}
+      </pre>
+    </div>
+  )
+}
+
 // ── 行展开：字段详情表（CSV 模式） ────────────────────────────────────
 function FieldDetailTable({ checks }) {
   const cols = [
@@ -203,14 +236,11 @@ function LogEntryFieldTable({ entry }) {
     { field: 'timestamp', label: '时间戳', color: '#13c2c2', role: 'timestamp' },
     { field: 'level',     label: '日志级别', color: '#722ed1', role: 'level' },
     { field: 'message',   label: '消息体', color: '#1677ff', role: 'message' },
-    { field: 'template',  label: '模板',   color: '#eb2f96', role: 'template' },
   ]
 
   const rows = EXTRACT_CFG.map(cfg => {
     const val = entry[cfg.field]
     const extracted = !!(val)
-    const isTemplate = cfg.field === 'template'
-    const hasVar = isTemplate && val?.includes('<*>')
     return {
       key: cfg.field,
       field: cfg.field,
@@ -219,7 +249,6 @@ function LogEntryFieldTable({ entry }) {
       role: cfg.role,
       value: val || '',
       extracted,
-      extra: isTemplate ? (hasVar ? '含变量 <*>' : '纯静态模板') : null,
       match: extracted ? true : null,
     }
   })
@@ -232,16 +261,19 @@ function LogEntryFieldTable({ entry }) {
           <RoleBadge role={r.role} />
         </span>
       ) },
-    { title: '提取值', dataIndex: 'value', key: 'value', ellipsis: true,
-      render: (v, r) => v
-        ? <code className={`field-val ${r.field === 'timestamp' ? 'expected-val' : ''}`}>{v}</code>
-        : <span className="empty-cell">（未提取）</span> },
+    { title: '提取值', dataIndex: 'value', key: 'value',
+      render: (v, r) => {
+        if (!v) return <span className="empty-cell">（未提取）</span>
+        // 长文本（如 JSON message）用 pre 完整展示，避免表格 ellipsis 截断
+        if (v.length > 80 || r.field === 'message') {
+          return <pre className="field-val entry-detail-pre entry-detail-pre--inline">{v}</pre>
+        }
+        return <code className={`field-val ${r.field === 'timestamp' ? 'expected-val' : ''}`}>{v}</code>
+      } },
     { title: '状态', key: 'status', width: 130, align: 'center',
       render: (_, r) => {
         if (r.match === null)
           return <Tag style={{ fontSize: 11 }} color="default">未提取</Tag>
-        if (r.extra)
-          return <Tag style={{ fontSize: 11 }} color={r.extra.includes('变量') ? 'green' : 'orange'}>{r.extra}</Tag>
         return <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
       } },
   ]
@@ -259,6 +291,7 @@ function LogEntryFieldTable({ entry }) {
         size="small"
         bordered={false}
       />
+      <FullTemplateBlock template={entry.template} templateSource={entry.template_source} />
       {hasParams && (
         <div style={{ marginTop: 10 }}>
           <Text type="secondary" style={{ fontSize: 11 }}>提取参数</Text>
@@ -431,10 +464,20 @@ const LogCompare = () => {
   const [csvData, setCsvData] = useState(null)
   const [rawPreview, setRawPreview] = useState(null) // { lineCount, sampleLines }
   const [parseResult, setParseResult] = useState(null)
+  const [parseMode, setParseMode] = useState('llm')
   const [loading, setLoading] = useState(false)
+  const [cacheClearing, setCacheClearing] = useState(false)
+  const [cacheClearConfirming, setCacheClearConfirming] = useState(false)
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
+  const cacheClearTimerRef = useRef(null)
   const PAGE_SIZE = 20
+
+  useEffect(() => () => {
+    if (cacheClearTimerRef.current) {
+      clearTimeout(cacheClearTimerRef.current)
+    }
+  }, [])
 
   const handleFileSelect = useCallback((file) => {
     if (!isAcceptedLogFile(file.name)) {
@@ -473,12 +516,45 @@ const LogCompare = () => {
     setLoading(true); setError(null)
     try {
       const data = fileMode === 'csv'
-        ? await lilacAPI.parseCsv(selectedFile)
-        : await lilacAPI.parseFile(selectedFile)
+        ? await lilacAPI.parseCsv(selectedFile, { parseMode })
+        : await lilacAPI.parseFile(selectedFile, { parseMode })
       setParseResult(data); setPage(1)
-      antMessage.success(`解析完成，共 ${data.total_entries} 条`)
+      antMessage.success(`${PARSE_MODE_LABELS[parseMode]} 解析完成，共 ${data.total_entries} 条`)
     } catch (err) { setError(err?.message || '解析失败') }
     finally { setLoading(false) }
+  }
+
+  const handleClearCache = async () => {
+    setCacheClearing(true)
+    try {
+      await lilacAPI.clearCache()
+      antMessage.success('日志解析缓存已清空')
+    } catch (err) {
+      antMessage.error(err?.message || '清空缓存失败')
+    } finally {
+      setCacheClearing(false)
+    }
+  }
+
+  const handleCacheClearClick = async () => {
+    if (!cacheClearConfirming) {
+      setCacheClearConfirming(true)
+      if (cacheClearTimerRef.current) {
+        clearTimeout(cacheClearTimerRef.current)
+      }
+      cacheClearTimerRef.current = setTimeout(() => {
+        setCacheClearConfirming(false)
+        cacheClearTimerRef.current = null
+      }, 3000)
+      return
+    }
+
+    if (cacheClearTimerRef.current) {
+      clearTimeout(cacheClearTimerRef.current)
+      cacheClearTimerRef.current = null
+    }
+    setCacheClearConfirming(false)
+    await handleClearCache()
   }
 
   const handleReset = () => {
@@ -492,6 +568,7 @@ const LogCompare = () => {
     setRawPreview(null)
     setParseResult(DEMO_PARSE_RESULT)
     setSelectedFile({ name: 'lora_request_trace.csv（示例）', size: 0 })
+    setParseMode('llm')
     setError(null); setPage(1)
     antMessage.success('示例数据已加载，共 8 行')
   }
@@ -705,6 +782,7 @@ const LogCompare = () => {
     converted: parseResult.csv_conversion?.converted_rows ?? parseResult.total_entries,
     cacheHits: parseResult.cache_hits, llmCalls: parseResult.llm_calls,
     drain3: parseResult.drain3_fallbacks, parseMs: parseResult.parse_time_ms,
+    mode: parseResult.parse_mode || parseMode,
   } : null
 
   const statsItems = useMemo(() => {
@@ -713,7 +791,11 @@ const LogCompare = () => {
       { title: '解析耗时', value: `${stats.parseMs?.toFixed(0) ?? '—'} ms`, icon: <ClockCircleOutlined /> },
       { title: 'LLM 调用', value: stats.llmCalls, icon: <ThunderboltOutlined style={{ color: '#1677ff' }} /> },
       { title: '缓存命中', value: stats.cacheHits, icon: <DatabaseOutlined style={{ color: '#52c41a' }} /> },
-      { title: 'Drain3 兜底', value: stats.drain3, icon: <WarningOutlined style={{ color: '#fa8c16' }} /> },
+      {
+        title: stats.mode === 'drain3' ? 'Drain3 解析' : 'Drain3 兜底',
+        value: stats.drain3,
+        icon: <WarningOutlined style={{ color: '#fa8c16' }} />,
+      },
     ]
     if (fileMode === 'csv') {
       return [
@@ -747,7 +829,27 @@ const LogCompare = () => {
             支持 CSV / LOG / TXT / TRC 等格式；均可逐行对比原始内容与 LILAC 结构化解析结果
           </Text>
         </div>
-        {(selectedFile||parseResult) && <Button icon={<ReloadOutlined/>} onClick={handleReset}>重新上传</Button>}
+        <div className="header-actions">
+          <div className="cache-tool">
+            <DatabaseOutlined className="cache-tool-icon" />
+            <span className="cache-tool-label">
+              {cacheClearConfirming ? '再次点击确认' : '解析缓存'}
+            </span>
+            <Button
+              aria-label={cacheClearConfirming ? '确认清空日志解析缓存' : '清空日志解析缓存'}
+              className={`cache-clear-btn ${cacheClearConfirming ? 'is-confirming' : ''}`}
+              icon={cacheClearConfirming ? <CheckOutlined /> : <DeleteOutlined />}
+              loading={cacheClearing}
+              onClick={handleCacheClearClick}
+              size="small"
+              title={cacheClearConfirming ? '确认清空日志解析缓存' : '清空日志解析缓存'}
+              type="text"
+            >
+              {cacheClearConfirming ? '清空' : null}
+            </Button>
+          </div>
+          {(selectedFile||parseResult) && <Button icon={<ReloadOutlined/>} onClick={handleReset}>重新上传</Button>}
+        </div>
       </div>
 
       {/* 上传区 */}
@@ -782,11 +884,26 @@ const LogCompare = () => {
                 {fileInfoExtra}
                 {fileMode === 'log' && <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>日志文件</Tag>}
                 {fileMode === 'csv' && <Tag color="cyan" style={{ marginLeft: 8, fontSize: 11 }}>CSV</Tag>}
+                <Tag color={parseMode === 'llm' ? 'geekblue' : 'orange'} style={{ marginLeft: 8, fontSize: 11 }}>
+                  {PARSE_MODE_LABELS[parseMode]} 模式
+                </Tag>
               </Text>
             </Col>
             <Col>
+              <div className="parse-mode-control">
+                <Text type="secondary" className="parse-mode-label">解析模式</Text>
+                <Segmented
+                  className="parse-mode-segmented"
+                  options={PARSE_MODE_OPTIONS}
+                  value={parseMode}
+                  onChange={setParseMode}
+                  disabled={loading}
+                />
+              </div>
+            </Col>
+            <Col>
               <Button type="primary" icon={<ThunderboltOutlined/>} size="large" loading={loading} onClick={handleParse} className="parse-btn">
-                开始 LILAC 解析
+                开始 {PARSE_MODE_LABELS[parseMode]} 解析
               </Button>
             </Col>
           </Row>
@@ -904,8 +1021,18 @@ const LogCompare = () => {
               columns={columns}
               dataSource={pagedData}
               expandable={parseResult ? {
-                expandedRowRender: rec => <FieldDetailTable checks={rec.fieldChecks}/>,
-                rowExpandable: rec => rec.fieldChecks?.length > 0,
+                expandedRowRender: rec => (
+                  <div className="entry-detail">
+                    <FieldDetailTable checks={rec.fieldChecks} />
+                    {rec.entry && (
+                      <FullTemplateBlock
+                        template={rec.entry.template}
+                        templateSource={rec.entry.template_source}
+                      />
+                    )}
+                  </div>
+                ),
+                rowExpandable: rec => rec.fieldChecks?.length > 0 || !!rec.entry?.template,
               } : undefined}
               pagination={{
                 current:page, pageSize:PAGE_SIZE, total:mergedData.length,

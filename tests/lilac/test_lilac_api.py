@@ -112,6 +112,20 @@ class TestLilacParseTextEndpoint:
         data = response.json()
         assert data["data"]["total_entries"] == 3
 
+    def test_parse_text_with_parse_mode(self, client):
+        response = client.post(
+            "/diagnose/lilac/parse_text",
+            json={
+                "text": "2024-01-01 10:00:00 INFO Server started",
+                "parse_mode": "drain3",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 200
+        assert data["data"]["parse_mode"] == "drain3"
+
 
 class TestLilacCacheEndpoints:
     """缓存相关端点测试"""
