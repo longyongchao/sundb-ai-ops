@@ -22,12 +22,14 @@ Identify the STATIC SKELETON of the log — the part that is identical across al
 | Numeric values | `128`, `3.1415`, `1.04e-3`, `0x7f3a`, `95.2%` | <*> |
 | IP:port / CIDR | `192.168.1.1:5432`, `10.0.0.0/24`, `[::1]:443` | <*> |
 | Identifiers | UUIDs, session/request/transaction IDs, hex hashes, tokens | <*> |
+| Log-domain IDs | `blk_38865049064139660`, `appattempt_1445144423722_0020_000001`, `application_1445144423722_0020`, `container_1445144423722_0020_01_000001` | <*> |
 | Hostnames / domains | `db-replica-03.internal`, `node2.cluster.local` | <*> |
 | File paths | `/var/log/app.log`, `C:\\Users\\admin\\file.txt` | <*> |
 | Usernames / emails | `alice`, `admin@example.com` | <*> |
 | Process/thread IDs | PID `12345`, TID `0x7f3a`, `Thread-4` | <*> |
 | Durations / sizes | `350ms`, `1.2GB`, `45s`, `128KB` | <*> |
 | URLs | `http://api.internal/v1/health` | <*> |
+| HTTP request metrics | `status: 200`, `len: 1893`, `time: 0.2477829` | `status: <*>`, `len: <*>`, `time: <*>` |
 | Version strings (when they embed build numbers) | `v3.2.1-build.4521` | <*> |
 | SQL/query fragments | Embedded queries or table-specific clauses | <*> |
 | Container/pod names | `api-server-6d8f7-xk2p9` | <*> |
@@ -52,6 +54,18 @@ Identify the STATIC SKELETON of the log — the part that is identical across al
 3. **Adjacency without separator**: `2026[1,8]` = two values glued together → `<*>[<*>]`. Use surrounding syntax (brackets, delimiters) to determine boundaries.
 4. **Repeated parameters**: Each occurrence gets its own <*>. `from 10.0.0.1 to 10.0.0.2` → `from <*> to <*>`
 5. **When uncertain**: If a token could be static or dynamic, check — does it look like it would change across different executions of the same code path? If yes → <*>.
+6. **Do not preserve concrete runtime IDs**: block IDs, application IDs, container IDs, request IDs, status codes, byte lengths, durations, and floating point costs are variables even when they appear frequently.
+
+## Log parsing examples
+
+Input: `PacketResponder 1 for block blk_38865049064139660 terminating`
+Output: {"template": "PacketResponder <*> for block <*> terminating", "variables": ["1", "blk_38865049064139660"]}
+
+Input: `Created MRAppMaster for application appattempt_1445144423722_0020_000001`
+Output: {"template": "Created MRAppMaster for application <*>", "variables": ["appattempt_1445144423722_0020_000001"]}
+
+Input: `10.11.10.1 "GET /v2/tenant/servers/detail HTTP/1.1" status: 200 len: 1893 time: 0.2477829`
+Output: {"template": "<*> \"GET <*>\" status: <*> len: <*> time: <*>", "variables": ["10.11.10.1", "/v2/tenant/servers/detail HTTP/1.1", "200", "1893", "0.2477829"]}
 
 ## Output format
 

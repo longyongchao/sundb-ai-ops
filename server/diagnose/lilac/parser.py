@@ -16,6 +16,17 @@ from server.diagnose.lilac.preprocessor import LogPreprocessor, PreprocessedLine
 
 logger = logging.getLogger(__name__)
 
+DYNAMIC_BODY_PATTERNS = [
+    re.compile(r'\bblk_-?\d+\b'),
+    re.compile(r'\b(?:appattempt|application|container|attempt)_\d+(?:_\d+)+\b'),
+    re.compile(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'),
+    re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b'),
+    re.compile(r'(?<![\w.])-?\d+\.\d+(?![\w.])'),
+    re.compile(r'(?<![\w])-?\d{4,}\b'),
+    re.compile(r'\b(?:status|len|size|time|duration|elapsed|latency|cost|id|attemptId|keyId)\s*[:=]\s*-?\d+', re.IGNORECASE),
+    re.compile(r'"(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+[^"]+\s+HTTP/\d(?:\.\d+)?"'),
+]
+
 
 class LilacParser:
     """LILAC 统一日志解析器
@@ -60,7 +71,8 @@ class LilacParser:
 
         # (2) 静态行快捷路径：预处理后无任何变量，直接作为模板
         if (preprocessed.masked_body == preprocessed.body
-                and "<*>" not in preprocessed.masked_body):
+                and "<*>" not in preprocessed.masked_body
+                and not self._looks_dynamic_body(preprocessed.body)):
             template = LogTemplate.from_template_str(preprocessed.body, source="static")
             self._cache.insert(template, preprocessed.body)
             return template, "static"
@@ -74,6 +86,7 @@ class LilacParser:
                 preprocessed.masked_body, demos
             )
             if template:
+                template = self._normalize_template(template)
                 self._cache.insert(
                     template, preprocessed.masked_body,
                     lookup_tokens=preprocessed.tokens,
@@ -84,6 +97,7 @@ class LilacParser:
         if self._drain3 and self._drain3.available:
             template = self._drain3.parse(preprocessed.masked_body)
             if template:
+                template = self._normalize_template(template)
                 self._cache.insert(
                     template, preprocessed.masked_body,
                     lookup_tokens=preprocessed.tokens,
@@ -91,6 +105,37 @@ class LilacParser:
                 return template, "drain3"
 
         return None, ""
+
+    @staticmethod
+    def _looks_dynamic_body(body: str) -> bool:
+        """Return True when an unmasked body still contains obvious runtime values."""
+        return any(pattern.search(body or "") for pattern in DYNAMIC_BODY_PATTERNS)
+
+    @staticmethod
+    def _normalize_template(template: LogTemplate) -> LogTemplate:
+        """Repair common partial-variable templates produced by LLM/Drain3."""
+        template_str = template.template_str
+        replacements = [
+            (r'\bblk_-?\d+\b', '<*>'),
+            (r'\bblk_<\*>\b', '<*>'),
+            (r'\bappattempt_\d+_\d+_\d+\b', '<*>'),
+            (r'\bapplication_\d+_\d+\b', '<*>'),
+            (r'\bcontainer_\d+_\d+_\d+_\d+\b', '<*>'),
+            (r'\battempt_\d+(?:_\d+)*[A-Za-z0-9_]*\b', '<*>'),
+            (r'"(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+<\*>\s+HTTP/\d(?:\.\d+)?"', r'"\1 <*>"'),
+            (r'\b(status|len|size|time|duration|elapsed|latency|cost|port|id|attemptId|keyId|startIndex|maxEvents)\s*([:=])\s*-?\d+(?:\.\d+)?', r'\1\2 <*>'),
+            (r'(?<![\w.])-?\d+\.<\*>(?![\w.])', '<*>'),
+            (r'(?<![\w.])-?\d+\.\d+(?![\w.])', '<*>'),
+            (r'(?<![\w])-?\d{4,}\b', '<*>'),
+            (r'\b(PacketResponder)\s+\d+\b', r'\1 <*>'),
+        ]
+        for pattern, replacement in replacements:
+            template_str = re.sub(pattern, replacement, template_str, flags=re.IGNORECASE)
+        template_str = re.sub(r'(?:<\*>\s*){2,}', '<*> ', template_str)
+        template_str = re.sub(r'\s+', ' ', template_str).strip()
+        if template_str == template.template_str:
+            return template
+        return LogTemplate.from_template_str(template_str, source=template.source)
 
     def parse_line(
         self, raw_line: str, source_file: str = "", line_number: int = 0
