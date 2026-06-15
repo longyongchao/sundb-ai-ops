@@ -1,0 +1,3 @@
+Mar 15 10:23:01 webserver01 nginx[12345]: GET /api/users 200 0.032s
+Mar 15 10:23:02 webserver01 nginx[12345]: POST /api/orders 201 0.118s
+Mar 15 10:23:03 db01 postgres[23456]: connection authorized user=app database=sundb

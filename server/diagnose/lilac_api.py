@@ -12,9 +12,10 @@
 
 import logging
 import os
+import re
 import tempfile
 import shutil
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Body, File, Query, UploadFile
 
@@ -406,10 +407,32 @@ async def lilac_parse_text(
     text: str = Body(..., embed=True, description="日志文本内容"),
     source_file: Optional[str] = Body(None, embed=True, description="来源文件名(可选)"),
     parse_mode: str = Body("auto", embed=True, description="解析模式: auto / llm / drain3"),
+    regex: Optional[List[Dict]] = Body(None, embed=True, description="自定义正则预处理规则列表，每项含 pattern 和可选 replacement(默认<*>)"),
 ) -> BaseResponse:
-    """直接提交日志文本解析"""
+    """直接提交日志文本解析
+
+    regex 参数示例:
+      [{"pattern": "(\\d+\\.){3}\\d+", "replacement": "<*>"},
+       {"pattern": "blk_-?\\d+"}]
+
+    处理顺序: 调用方 regex → 内置 MASK_PATTERNS → cache/Drain3/LLM
+    """
     try:
         mode = _normalize_parse_mode(parse_mode)
+        if regex:
+            compiled = []
+            for r in regex:
+                pat = re.compile(r["pattern"])
+                rep = r.get("replacement", "<*>")
+                compiled.append((pat, rep))
+            lines = text.splitlines()
+            processed = []
+            for line in lines:
+                for pat, rep in compiled:
+                    line = pat.sub(rep, line)
+                processed.append(line)
+            text = "\n".join(processed)
+
         parser = _get_parser()
         result = parser.parse_content(text, source_file=source_file, parse_mode=mode)
 

@@ -10,7 +10,7 @@ def _token_matches(log_token: str, template_token: str) -> bool:
 
     支持三种情况：
     1. 模板 token 整体是 <*> → 匹配任何日志 token
-    2. 模板 token 内嵌 <*>（如 [SESSION:<*>][DDL）→ 静态部分必须对齐
+    2. 模板 token 内嵌 <*>（如 blk_<*>）→ 静态部分必须对齐
     3. 无 <*> → 严格相等
     """
     if template_token == PLACEHOLDER:
@@ -65,7 +65,6 @@ def token_similarity_fuzzy(
 
     当长度差 1 时，在较长序列中尝试每个 skip 位置，
     对齐后计算匹配度，乘以 penalty 惩罚因子。
-    精确匹配时直接委托 token_similarity()。
     """
     n_log = len(log_tokens)
     n_tpl = len(template_tokens)

@@ -257,3 +257,7 @@ knowledge_base/*/content/
 /release.py
 /update_db_to_chinese.py
 
+/data
+
+benchmark/datasets
+benchmark/results
