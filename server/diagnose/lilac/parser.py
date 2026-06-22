@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import time
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 from server.diagnose.lilac.cache import AdaptiveParsingCache
 from server.diagnose.lilac.config import LilacConfig
@@ -15,6 +15,8 @@ from server.diagnose.lilac.models import GenericLogEntry, LogTemplate, ParseResu
 from server.diagnose.lilac.preprocessor import LogPreprocessor, PreprocessedLine
 
 logger = logging.getLogger(__name__)
+
+ParseMode = Literal["auto", "llm", "drain3"]
 
 DYNAMIC_BODY_PATTERNS = [
     re.compile(r'\bblk_-?\d+\b'),
@@ -55,7 +57,7 @@ class LilacParser:
         self._drain3 = Drain3Fallback() if self._config.enable_drain3 else None
 
     def _resolve_template(
-        self, preprocessed: PreprocessedLine
+        self, preprocessed: PreprocessedLine, parse_mode: ParseMode = "auto"
     ) -> Tuple[Optional[LogTemplate], str]:
         """解析模板核心逻辑：缓存 → 静态快捷 → LLM → Drain3"""
         if not preprocessed.tokens:
@@ -67,15 +69,16 @@ class LilacParser:
             return template, "cache"
 
         # (2) 静态行快捷路径：预处理后无任何变量，直接作为模板
-        if (preprocessed.masked_body == preprocessed.body
+        template_src = preprocessed.template_body or preprocessed.body
+        if (preprocessed.masked_body == template_src
                 and "<*>" not in preprocessed.masked_body
-                and not self._looks_dynamic_body(preprocessed.body)):
-            template = LogTemplate.from_template_str(preprocessed.body, source="static")
-            self._cache.insert(template, preprocessed.body)
+                and not self._looks_dynamic_body(template_src)):
+            template = LogTemplate.from_template_str(template_src, source="static")
+            self._cache.insert(template, preprocessed.masked_body)
             return template, "static"
 
         # (3) LLM 提取
-        if self._llm_extractor:
+        if parse_mode in ("auto", "llm") and self._llm_extractor:
             demos = self._demo_pool.sample(
                 preprocessed.tokens, k=self._config.demo_sample_k
             )
@@ -90,8 +93,8 @@ class LilacParser:
                 )
                 return template, "llm"
 
-        # (4) Drain3 兜底
-        if self._drain3 and self._drain3.available:
+        # (4) Drain3 兜底 / 指定 Drain3 模式
+        if parse_mode in ("auto", "drain3") and self._drain3 and self._drain3.available:
             template = self._drain3.parse(preprocessed.masked_body)
             if template:
                 template = self._normalize_template(template)
@@ -134,7 +137,11 @@ class LilacParser:
         return LogTemplate.from_template_str(template_str, source=template.source)
 
     def parse_line(
-        self, raw_line: str, source_file: str = "", line_number: int = 0
+        self,
+        raw_line: str,
+        source_file: str = "",
+        line_number: int = 0,
+        parse_mode: ParseMode = "auto",
     ) -> GenericLogEntry:
         """解析单行日志"""
         preprocessed = self._preprocessor.preprocess(raw_line)
@@ -150,7 +157,7 @@ class LilacParser:
                 level=preprocessed.header_fields.get("level", ""),
             )
 
-        template, source = self._resolve_template(preprocessed)
+        template, source = self._resolve_template(preprocessed, parse_mode=parse_mode)
 
         raw_body_tokens = preprocessed.body.split() if preprocessed.body else preprocessed.raw_text.split()
         parameters = self._extract_parameters(raw_body_tokens, template)
@@ -171,12 +178,22 @@ class LilacParser:
             metadata=metadata,
         )
 
-    def parse_content(self, content: str, source_file: str = "") -> ParseResult:
+    def parse_content(
+        self,
+        content: str,
+        source_file: str = "",
+        parse_mode: ParseMode = "auto",
+    ) -> ParseResult:
         """解析日志文本内容（批量去重优化）"""
         start = time.time()
         raw_lines = content.splitlines()
         assembled = self._assemble_multiline(raw_lines)
         total = len(assembled)
+
+        logger.info(
+            f"[LILAC] 开始解析: {total} 条日志 "
+            f"(source={source_file or 'text'}, mode={parse_mode})"
+        )
 
         # === Pass 1: 预处理所有行 + 按 token 签名分组 ===
         preprocessed_lines: List[Tuple[int, str, PreprocessedLine]] = []
@@ -203,7 +220,9 @@ class LilacParser:
 
         for key, rep_idx in groups.items():
             _, _, preprocessed = preprocessed_lines[rep_idx]
-            template, source_str = self._resolve_template(preprocessed)
+            template, source_str = self._resolve_template(
+                preprocessed, parse_mode=parse_mode
+            )
             resolved[key] = (template, source_str)
 
             if source_str == "cache":
@@ -292,6 +311,7 @@ class LilacParser:
 
             if (preprocessed.header_format != "unknown"
                     and not preprocessed.body
+                    and preprocessed.header_format != "json_log"
                     and i + 1 < len(raw_lines)
                     and raw_lines[i + 1].strip()):
                 merged = line + " " + raw_lines[i + 1].strip()
@@ -303,11 +323,11 @@ class LilacParser:
 
         return result
 
-    def parse_file(self, file_path: str) -> ParseResult:
+    def parse_file(self, file_path: str, parse_mode: ParseMode = "auto") -> ParseResult:
         """解析日志文件"""
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
-        return self.parse_content(content, source_file=file_path)
+        return self.parse_content(content, source_file=file_path, parse_mode=parse_mode)
 
     def get_cache(self) -> AdaptiveParsingCache:
         return self._cache

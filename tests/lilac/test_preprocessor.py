@@ -1,5 +1,6 @@
 """预处理器单元测试"""
 
+import json
 import pytest
 import sys
 import os
@@ -108,3 +109,91 @@ class TestTokenization:
         result = preprocessor.preprocess("2024-01-01 10:00:00 INFO Connection established successfully")
         assert result.token_count == len(result.tokens)
         assert result.first_token == result.tokens[0] if result.tokens else ""
+
+
+class TestJsonLog:
+    """PostgreSQL / JSON 结构化日志"""
+
+    SAMPLE = (
+        '{"timestamp":"2023-03-27 00:26:35.719 EDT","pid":7808,'
+        '"session_id":"64211afb.1e80","error_severity":"LOG",'
+        '"message":"ending log output to stderr","backend_type":"postmaster"}'
+    )
+
+    def test_json_log_fields(self, preprocessor):
+        result = preprocessor.preprocess(self.SAMPLE)
+        assert result.header_format == "json_log"
+        assert result.header_fields["timestamp"] == "2023-03-27 00:26:35.719 EDT"
+        assert result.header_fields["level"] == "INFO"
+        assert result.body == "ending log output to stderr"
+        assert result.header_fields["pid"] == "7808"
+        assert result.header_fields["backend_type"] == "postmaster"
+        assert "error_severity" not in result.header_fields
+
+    def test_json_log_debug_severity(self, preprocessor):
+        line = (
+            '{"timestamp":"2023-03-27 00:26:35.871 EDT","error_severity":"DEBUG",'
+            '"message":"checkpointer updated shared memory configuration values"}'
+        )
+        result = preprocessor.preprocess(line)
+        assert result.header_fields["level"] == "DEBUG"
+
+    def test_json_log_template_body(self, preprocessor):
+        result = preprocessor.preprocess(self.SAMPLE)
+        assert result.template_body == "ending log output to stderr"
+        assert result.masked_body == "ending log output to stderr"
+        assert "timestamp" not in result.tokens
+        assert "pid" not in result.tokens
+
+    def test_json_log_masks_message_key_values(self, preprocessor):
+        line = (
+            '{"timestamp":"2023-03-27 00:26:35.719 EDT","pid":42,'
+            '"error_severity":"LOG",'
+            '"message":"connection authorized: user=alice database=db1 host=127.0.0.1"}'
+        )
+        result = preprocessor.preprocess(line)
+        assert result.body == "connection authorized: user=alice database=db1 host=127.0.0.1"
+        assert result.template_body == (
+            "connection authorized: user=<*> database=<*> host=<*>"
+        )
+        assert result.masked_body == result.template_body
+
+    @pytest.mark.parametrize(
+        ("message", "template_body"),
+        [
+            (
+                "database system was shut down at 2023-03-27 00:26:21 EDT",
+                "database system was shut down at <*>",
+            ),
+            (
+                "checkpoint record is at 0/152E8B8",
+                "checkpoint record is at <*>",
+            ),
+            (
+                "next transaction ID: 735; next OID: 16388",
+                "next transaction ID: <*>; next OID: <*>",
+            ),
+            (
+                "listening on IPv4 address \"127.0.0.1\", port 5432",
+                "listening on IPv4 address \"<*>\", port <*>",
+            ),
+            (
+                "listening on Unix socket \"/var/run/postgresql/.s.PGSQL.5432\"",
+                "listening on Unix socket \"<*>\"",
+            ),
+        ],
+    )
+    def test_json_log_masks_postgres_dynamic_values(
+        self, preprocessor, message, template_body
+    ):
+        line = json.dumps(
+            {
+                "timestamp": "2023-03-27 00:26:35.719 EDT",
+                "error_severity": "LOG",
+                "message": message,
+            },
+            separators=(",", ":"),
+        )
+        result = preprocessor.preprocess(line)
+        assert result.body == message
+        assert result.template_body == template_body

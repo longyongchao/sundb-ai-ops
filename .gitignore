@@ -67,6 +67,8 @@ diagnose_run_pid.txt
 # Database files
 # ========================
 *.db
+*.db-wal
+*.db-shm
 *.db-journal
 *.sqlite3
 *.sqlite3-journal
@@ -90,6 +92,11 @@ chroma_db/
 nltk_data/
 stress_test_results/
 m3e-base/
+data/*.db
+data/*.db-*
+
+# Large datasets / external repos
+clusterdata/
 
 # ========================
 # Configs with secrets (keep examples)

@@ -1,7 +1,7 @@
 # LILAC 日志解析 API 技术文档
 
-> 版本: 1.0  
-> 日期: 2026-06-02  
+> 版本: 1.0
+> 日期: 2026-06-02
 > 模块路径: `server/diagnose/lilac_api.py`, `server/diagnose/lilac/`
 
 ---

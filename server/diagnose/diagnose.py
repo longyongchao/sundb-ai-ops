@@ -62,7 +62,11 @@ DIAGNOSIS_ASYNC_TIMEOUT = 300  # 异步诊断超时时间（5分钟）
 TASK_START_CHECK_INTERVAL = 0.5
 TASK_START_MAX_RETRY = 10
 
-load_knowledge()
+# 知识库加载失败不应阻塞诊断 API 路由挂载；诊断执行时仍可由内部流程按需加载/降级。
+try:
+    load_knowledge()
+except Exception as knowledge_error:
+    logger.warning(f"启动阶段知识库加载失败，不阻塞诊断路由挂载: {knowledge_error}", exc_info=True)
 
 current_task = {"thread": None, "output": "", "process": None}
 THREADNAME = "run_diagnose"
@@ -606,6 +610,18 @@ async def quick_diagnose(
             if record_id:
                 result["record_id"] = record_id
                 logger.info(f"诊断记录已保存到数据库，ID: {record_id}")
+                try:
+                    from server.evolution.collector import capture_diagnosis_result
+                    evolution_case_id = capture_diagnosis_result(
+                        anomaly_info=anomaly_info,
+                        result=result,
+                        record_id=record_id,
+                    )
+                    if evolution_case_id:
+                        result["evolution_case_id"] = evolution_case_id
+                        logger.info(f"自进化案例已采集，ID: {evolution_case_id}, record_id={record_id}")
+                except Exception as evolution_error:
+                    logger.warning(f"自进化案例采集失败，不影响诊断主流程: {evolution_error}")
             else:
                 logger.warning("诊断记录保存失败，record_id 为 None")
         except Exception as db_error:

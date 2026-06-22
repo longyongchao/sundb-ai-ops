@@ -14,6 +14,8 @@ import {
   MenuUnfoldOutlined,
   DatabaseOutlined,
   ApiOutlined,
+  BranchesOutlined,
+  DiffOutlined,
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 import NotificationBell from '../../components/NotificationBell'
@@ -23,6 +25,7 @@ import './index.scss'
 const { Header, Sider, Content } = Layout
 
 const pageActivityMap = {
+  '/evolution': { type: 'evolution', action: '访问自进化中心' },
   '/dashboard': { type: 'dashboard', action: '访问控制台' },
   '/diagnosis': { type: 'diagnose', action: '使用智能诊断' },
   '/monitoring': { type: 'monitor', action: '查看实时监控' },
@@ -72,6 +75,11 @@ const recordActivity = (pathname) => {
 
 const menuItems = [
   {
+    key: '/evolution',
+    icon: <BranchesOutlined />,
+    label: '自进化中心',
+  },
+  {
     key: '/dashboard',
     icon: <DashboardOutlined />,
     label: '控制台',
@@ -100,6 +108,11 @@ const menuItems = [
     key: '/reports',
     icon: <BarChartOutlined />,
     label: '诊断报告',
+  },
+  {
+    key: '/log-compare',
+    icon: <DiffOutlined />,
+    label: '日志解析',
   },
 ]
 
